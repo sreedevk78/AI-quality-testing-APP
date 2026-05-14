@@ -1,0 +1,529 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum WorkspaceRole {
+  owner
+  admin
+  editor
+  reviewer
+  viewer
+}
+
+enum ProviderName {
+  gemini
+  groq
+}
+
+enum EntityStatus {
+  draft
+  active
+  archived
+  approved
+}
+
+enum RunStatus {
+  queued
+  running
+  completed
+  failed
+  cancelled
+}
+
+enum RunItemStatus {
+  queued
+  running
+  passed
+  warning
+  failed
+  cancelled
+}
+
+enum CredentialStatus {
+  active
+  disabled
+  rotated
+}
+
+model User {
+  id            String            @id @default(uuid()) @db.Uuid
+  authUserId    String            @unique @map("auth_user_id")
+  fullName      String?           @map("full_name")
+  email         String            @unique
+  avatarUrl     String?           @map("avatar_url")
+  timezone      String?
+  memberships   WorkspaceMember[]
+  reviews       HumanReview[]
+  usageEvents   UsageEvent[]
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String            @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String            @unique
+  ownerId   String            @map("owner_user_id") @db.Uuid
+  plan      String            @default("free")
+  status    String            @default("active")
+  members   WorkspaceMember[]
+  projects  Project[]
+  prompts   PromptVersion[]
+  datasets  Dataset[]
+  runs      Run[]
+  credentials ProviderCredential[]
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String        @id @default(uuid()) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  userId      String       @map("user_id") @db.Uuid
+  role        WorkspaceRole
+  invitedBy   String?      @map("invited_by") @db.Uuid
+  joinedAt    DateTime?    @map("joined_at")
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+model Project {
+  id                 String          @id @default(uuid()) @db.Uuid
+  workspaceId        String          @map("workspace_id") @db.Uuid
+  name               String
+  description        String?
+  status             String          @default("active")
+  createdBy          String          @map("created_by") @db.Uuid
+  defaultProvider    ProviderName    @default(groq) @map("default_provider")
+  defaultModel       String          @map("default_model")
+  defaultTemperature Decimal         @default(0.2) @map("default_temperature") @db.Decimal(3, 2)
+  tags               String[]        @default([])
+  workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  promptVersions     PromptVersion[]
+  datasets           Dataset[]
+  runs               Run[]
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@map("projects")
+}
+
+model PromptVersion {
+  id                 String          @id @default(uuid()) @db.Uuid
+  workspaceId        String          @map("workspace_id") @db.Uuid
+  projectId          String          @map("project_id") @db.Uuid
+  promptKey          String          @map("prompt_key")
+  versionNumber      Int             @map("version_number")
+  title              String
+  systemPrompt       String          @map("system_prompt")
+  userPromptTemplate String          @map("user_prompt_template")
+  variablesSchema    Json            @default("{}") @map("variables_schema")
+  provider           ProviderName    @default(groq)
+  modelName          String          @map("model_name")
+  modelParamsJson    Json            @default("{}") @map("model_params_json")
+  status             EntityStatus    @default(draft)
+  changelog          String?
+  createdBy          String          @map("created_by") @db.Uuid
+  workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  runs               Run[]
+  feedback           PromptFeedback[]
+  modelCalls         ModelCall[]
+  releaseApprovals   ReleaseApproval[]
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@unique([projectId, promptKey, versionNumber])
+  @@index([workspaceId])
+  @@map("prompt_versions")
+}
+
+model Dataset {
+  id            String        @id @default(uuid()) @db.Uuid
+  workspaceId   String        @map("workspace_id") @db.Uuid
+  projectId     String        @map("project_id") @db.Uuid
+  name          String
+  description   String?
+  sourceType    String        @default("manual") @map("source_type")
+  versionNumber Int           @default(1) @map("version_number")
+  status        EntityStatus  @default(draft)
+  tags          String[]      @default([])
+  createdBy     String        @map("created_by") @db.Uuid
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project       Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  cases         DatasetCase[]
+  runs          Run[]
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@map("datasets")
+}
+
+model DatasetCase {
+  id                 String    @id @default(uuid()) @db.Uuid
+  workspaceId         String   @map("workspace_id") @db.Uuid
+  datasetId           String   @map("dataset_id") @db.Uuid
+  inputPayloadJson    Json     @map("input_payload_json")
+  expectedOutputJson  Json?    @map("expected_output_json")
+  rubricJson          Json     @default("{}") @map("rubric_json")
+  tags                String[] @default([])
+  difficulty          String   @default("medium")
+  sourceReference     String?  @map("source_reference")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdBy           String   @map("created_by") @db.Uuid
+  dataset             Dataset  @relation(fields: [datasetId], references: [id], onDelete: Cascade)
+  runItems            RunItem[]
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([workspaceId, datasetId])
+  @@map("dataset_cases")
+}
+
+model Run {
+  id              String         @id @default(uuid()) @db.Uuid
+  workspaceId     String         @map("workspace_id") @db.Uuid
+  projectId       String         @map("project_id") @db.Uuid
+  promptVersionId String         @map("prompt_version_id") @db.Uuid
+  datasetId       String         @map("dataset_id") @db.Uuid
+  baselineRunId   String?        @map("baseline_run_id") @db.Uuid
+  provider        ProviderName
+  modelName       String         @map("model_name")
+  modelParamsJson Json           @default("{}") @map("model_params_json")
+  status          RunStatus      @default(queued)
+  startedAt       DateTime?      @map("started_at")
+  completedAt     DateTime?      @map("completed_at")
+  totalCases      Int            @default(0) @map("total_cases")
+  passedCases     Int            @default(0) @map("passed_cases")
+  failedCases     Int            @default(0) @map("failed_cases")
+  averageScore    Decimal?       @map("average_score") @db.Decimal(5, 4)
+  totalCost       Decimal        @default(0) @map("total_cost") @db.Decimal(12, 6)
+  createdBy       String         @map("created_by") @db.Uuid
+  workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  promptVersion   PromptVersion  @relation(fields: [promptVersionId], references: [id])
+  dataset         Dataset        @relation(fields: [datasetId], references: [id])
+  items           RunItem[]
+  humanReviews    HumanReview[]
+  usageEvents     UsageEvent[]
+  statusEvents    RunStatusEvent[]
+  releaseApprovals ReleaseApproval[]
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  @@index([workspaceId, projectId])
+  @@map("runs")
+}
+
+model RunItem {
+  id                 String        @id @default(uuid()) @db.Uuid
+  workspaceId         String       @map("workspace_id") @db.Uuid
+  runId               String       @map("run_id") @db.Uuid
+  datasetCaseId       String       @map("dataset_case_id") @db.Uuid
+  status              RunItemStatus @default(queued)
+  inputSnapshotJson   Json         @map("input_snapshot_json")
+  outputSnapshotJson  Json?        @map("output_snapshot_json")
+  score               Decimal?     @db.Decimal(5, 4)
+  errorMessage        String?      @map("error_message")
+  retryCount          Int          @default(0) @map("retry_count")
+  startedAt           DateTime?    @map("started_at")
+  completedAt         DateTime?    @map("completed_at")
+  run                 Run          @relation(fields: [runId], references: [id], onDelete: Cascade)
+  datasetCase         DatasetCase  @relation(fields: [datasetCaseId], references: [id])
+  trace               Trace?
+  reviews             HumanReview[]
+  feedback            PromptFeedback[]
+  modelCalls          ModelCall[]
+  createdAt           DateTime     @default(now()) @map("created_at")
+  updatedAt           DateTime     @updatedAt @map("updated_at")
+
+  @@index([workspaceId, runId])
+  @@map("run_items")
+}
+
+model RunStatusEvent {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  runId        String    @map("run_id") @db.Uuid
+  fromStatus   RunStatus? @map("from_status")
+  toStatus     RunStatus  @map("to_status")
+  reason       String?
+  metadataJson Json      @default("{}") @map("metadata_json")
+  run          Run       @relation(fields: [runId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([workspaceId, runId, createdAt])
+  @@map("run_status_events")
+}
+
+model Trace {
+  id              String         @id @default(uuid()) @db.Uuid
+  workspaceId      String        @map("workspace_id") @db.Uuid
+  runItemId        String        @unique @map("run_item_id") @db.Uuid
+  traceKey         String        @map("trace_key")
+  status           RunStatus     @default(running)
+  totalDurationMs  Int?          @map("total_duration_ms")
+  totalTokens      Int           @default(0) @map("total_tokens")
+  totalCost        Decimal       @default(0) @map("total_cost") @db.Decimal(12, 6)
+  runItem          RunItem       @relation(fields: [runItemId], references: [id], onDelete: Cascade)
+  spans            TraceSpan[]
+  graderResults    GraderResult[]
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@map("traces")
+}
+
+model TraceSpan {
+  id           String      @id @default(uuid()) @db.Uuid
+  workspaceId  String     @map("workspace_id") @db.Uuid
+  traceId      String     @map("trace_id") @db.Uuid
+  parentSpanId String?    @map("parent_span_id") @db.Uuid
+  spanType     String     @map("span_type")
+  name         String
+  inputJson    Json?      @map("input_json")
+  outputJson   Json?      @map("output_json")
+  toolName     String?    @map("tool_name")
+  durationMs   Int?       @map("duration_ms")
+  tokensIn     Int        @default(0) @map("tokens_in")
+  tokensOut    Int        @default(0) @map("tokens_out")
+  status       String
+  metadataJson Json       @default("{}") @map("metadata_json")
+  trace        Trace      @relation(fields: [traceId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now()) @map("created_at")
+
+  @@index([workspaceId, traceId])
+  @@map("trace_spans")
+}
+
+model ModelCall {
+  id              String        @id @default(uuid()) @db.Uuid
+  workspaceId     String        @map("workspace_id") @db.Uuid
+  runItemId       String        @map("run_item_id") @db.Uuid
+  traceSpanId     String?       @map("trace_span_id") @db.Uuid
+  promptVersionId String        @map("prompt_version_id") @db.Uuid
+  provider        ProviderName
+  modelName       String        @map("model_name")
+  temperature     Decimal?      @db.Decimal(3, 2)
+  topP            Decimal?      @map("top_p") @db.Decimal(3, 2)
+  seed            Int?
+  inputTokens     Int           @default(0) @map("input_tokens")
+  outputTokens    Int           @default(0) @map("output_tokens")
+  latencyMs       Int           @map("latency_ms")
+  costEstimate    Decimal       @default(0) @map("cost_estimate") @db.Decimal(12, 6)
+  rawText         String?       @map("raw_text")
+  structuredJson  Json?         @map("structured_json")
+  requestJson     Json          @default("{}") @map("request_json")
+  responseJson    Json          @default("{}") @map("response_json")
+  status          String
+  errorMessage    String?       @map("error_message")
+  runItem         RunItem       @relation(fields: [runItemId], references: [id], onDelete: Cascade)
+  promptVersion   PromptVersion @relation(fields: [promptVersionId], references: [id])
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([workspaceId, runItemId])
+  @@index([promptVersionId])
+  @@map("model_calls")
+}
+
+model GraderDefinition {
+  id             String        @id @default(uuid()) @db.Uuid
+  workspaceId    String        @map("workspace_id") @db.Uuid
+  name           String
+  description    String?
+  rubricJson     Json          @map("rubric_json")
+  provider       ProviderName  @default(groq)
+  modelName      String        @map("model_name")
+  promptTemplate String        @map("prompt_template")
+  status         EntityStatus  @default(active)
+  createdBy      String        @map("created_by") @db.Uuid
+  results        GraderResult[]
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@map("grader_definitions")
+}
+
+model GraderResult {
+  id                 String            @id @default(uuid()) @db.Uuid
+  workspaceId         String           @map("workspace_id") @db.Uuid
+  traceId             String           @map("trace_id") @db.Uuid
+  graderDefinitionId  String?          @map("grader_definition_id") @db.Uuid
+  score               Decimal          @db.Decimal(5, 4)
+  label               String
+  rationale           String?
+  metadataJson        Json             @default("{}") @map("metadata_json")
+  trace               Trace            @relation(fields: [traceId], references: [id], onDelete: Cascade)
+  graderDefinition    GraderDefinition? @relation(fields: [graderDefinitionId], references: [id])
+  createdAt           DateTime         @default(now()) @map("created_at")
+  updatedAt           DateTime         @updatedAt @map("updated_at")
+
+  @@index([workspaceId, traceId])
+  @@map("grader_results")
+}
+
+model HumanReview {
+  id             String    @id @default(uuid()) @db.Uuid
+  workspaceId    String    @map("workspace_id") @db.Uuid
+  runItemId      String    @map("run_item_id") @db.Uuid
+  reviewerUserId String    @map("reviewer_user_id") @db.Uuid
+  verdict        String
+  score          Decimal?  @db.Decimal(5, 4)
+  notes          String?
+  reviewedAt     DateTime? @map("reviewed_at")
+  runId          String?   @map("run_id") @db.Uuid
+  runItem        RunItem   @relation(fields: [runItemId], references: [id], onDelete: Cascade)
+  reviewer       User      @relation(fields: [reviewerUserId], references: [id])
+  run            Run?      @relation(fields: [runId], references: [id])
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@map("human_reviews")
+}
+
+model ComparisonReport {
+  id                String   @id @default(uuid()) @db.Uuid
+  workspaceId       String   @map("workspace_id") @db.Uuid
+  projectId         String   @map("project_id") @db.Uuid
+  baselineType      String   @map("baseline_type")
+  baselineId        String   @map("baseline_id") @db.Uuid
+  candidateType     String   @map("candidate_type")
+  candidateId       String   @map("candidate_id") @db.Uuid
+  metricSummaryJson Json     @map("metric_summary_json")
+  passFailStatus    String   @map("pass_fail_status")
+  createdBy         String   @map("created_by") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([workspaceId, projectId])
+  @@map("comparison_reports")
+}
+
+model ReleaseApproval {
+  id                 String          @id @default(uuid()) @db.Uuid
+  workspaceId        String          @map("workspace_id") @db.Uuid
+  runId              String?         @map("run_id") @db.Uuid
+  promptVersionId    String          @map("prompt_version_id") @db.Uuid
+  comparisonReportId String?         @map("comparison_report_id") @db.Uuid
+  status             String          @default("approved")
+  approvedBy         String          @map("approved_by") @db.Uuid
+  approvedAt         DateTime        @default(now()) @map("approved_at")
+  notes              String?
+  metadataJson       Json            @default("{}") @map("metadata_json")
+  run                Run?            @relation(fields: [runId], references: [id])
+  promptVersion      PromptVersion   @relation(fields: [promptVersionId], references: [id])
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@index([workspaceId, promptVersionId])
+  @@map("release_approvals")
+}
+
+model PromptFeedback {
+  id              String        @id @default(uuid()) @db.Uuid
+  workspaceId     String        @map("workspace_id") @db.Uuid
+  promptVersionId String        @map("prompt_version_id") @db.Uuid
+  runItemId       String?       @map("run_item_id") @db.Uuid
+  feedbackType    String        @map("feedback_type")
+  note            String
+  severity        String
+  createdBy       String        @map("created_by") @db.Uuid
+  promptVersion   PromptVersion @relation(fields: [promptVersionId], references: [id], onDelete: Cascade)
+  runItem         RunItem?      @relation(fields: [runItemId], references: [id])
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  @@index([workspaceId])
+  @@map("prompt_feedback")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  workspaceId  String   @map("workspace_id") @db.Uuid
+  actorUserId  String?  @map("actor_user_id") @db.Uuid
+  entityType   String   @map("entity_type")
+  entityId     String   @map("entity_id") @db.Uuid
+  action       String
+  beforeJson   Json?    @map("before_json")
+  afterJson    Json?    @map("after_json")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([workspaceId, entityType, entityId])
+  @@map("audit_logs")
+}
+
+model UsageEvent {
+  id           String       @id @default(uuid()) @db.Uuid
+  workspaceId  String       @map("workspace_id") @db.Uuid
+  userId       String?      @map("user_id") @db.Uuid
+  runId        String?      @map("run_id") @db.Uuid
+  eventType    String       @map("event_type")
+  provider     ProviderName
+  modelName    String       @map("model_name")
+  tokensIn     Int          @default(0) @map("tokens_in")
+  tokensOut    Int          @default(0) @map("tokens_out")
+  costEstimate Decimal      @default(0) @map("cost_estimate") @db.Decimal(12, 6)
+  occurredAt   DateTime     @map("occurred_at")
+  user         User?        @relation(fields: [userId], references: [id])
+  run          Run?         @relation(fields: [runId], references: [id])
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  @@index([workspaceId, occurredAt])
+  @@map("usage_events")
+}
+
+model ProviderCredential {
+  id                 String           @id @default(uuid()) @db.Uuid
+  workspaceId         String          @map("workspace_id") @db.Uuid
+  provider           ProviderName
+  displayName        String          @map("display_name")
+  encryptedSecretRef String          @map("encrypted_secret_ref")
+  status             CredentialStatus @default(active)
+  lastUsedAt         DateTime?       @map("last_used_at")
+  rotatedAt          DateTime?       @map("rotated_at")
+  createdBy          String          @map("created_by") @db.Uuid
+  workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, provider, displayName])
+  @@index([workspaceId])
+  @@map("provider_credentials")
+}
+
+model BackgroundJob {
+  id           String    @id @default(uuid()) @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  jobType      String    @map("job_type")
+  payloadJson  Json      @map("payload_json")
+  status       RunStatus @default(queued)
+  attempts     Int       @default(0)
+  runAfter     DateTime  @default(now()) @map("run_after")
+  lockedAt     DateTime? @map("locked_at")
+  errorMessage String?   @map("error_message")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([workspaceId, status, runAfter])
+  @@map("background_jobs")
+}

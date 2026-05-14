@@ -1,0 +1,249 @@
+# AI QA / Evaluation Lab — Comprehensive Gap Analysis & Development Plan
+
+## Executive Summary
+
+I've read all 6 specification documents (PRD, TRD, App Flow, UI/UX, Backend Schema, Implementation Plan) and every line of code across **~80 files** in the codebase. The app has a **solid foundation** — the Prisma schema covers all 20+ tables, auth flows work, services exist for all core domains, API routes are wired up, and the evaluate worker processes background jobs. However, the app is **~40% complete** relative to what the documents specify. The UI pages are almost entirely **read-only server-rendered displays** with no interactive client-side behavior. Below is a precise, document-backed gap analysis.
+
+---
+
+## What Exists & Works Well ✅
+
+| Layer | What's Built |
+|---|---|
+| **Schema** | All 20 Prisma models match the Backend Schema doc. Enums, indexes, relations, `workspace_id` scoping — all correct |
+| **Auth** | Sign-in (password + magic link + Google/GitHub OAuth), sign-up, callback, sign-out, middleware redirect |
+| **Workspace** | Create workspace, auto-create default project, member invite, role CRUD, slug generation |
+| **Context** | `getRequestContext()` syncs auth user → app profile, resolves workspace membership, role guards (`assertCanWrite`, `assertCanReview`) |
+| **AI Providers** | Gemini + Groq providers with unified `AIProvider` interface, cost estimation, structured JSON mode |
+| **Services** | PromptService, DatasetService, RunService, GradingService, ComparisonService, BillingService, AuditService, SearchService, TraceService, WorkspaceService |
+| **API Routes** | 28+ routes covering prompts, datasets, runs, traces, grading, comparisons, releases, search, billing, settings, workspaces |
+| **Background Worker** | `evaluate-worker.mjs` polls `background_jobs`, calls Groq/Gemini, creates traces + spans + model calls per run item |
+| **RLS** | Full `rls.sql` with helper functions (`is_workspace_member`, `workspace_role`, `can_edit_workspace`, `can_review_workspace`), 20+ policies, storage bucket policies |
+| **Seed Data** | Complete seed script with demo workspace, project, prompt versions, dataset, cases, run, items, trace, spans, grader |
+| **Pages** | All 9 nav pages exist: Dashboard, Prompts, Datasets, Runs, Traces, Grading, Comparisons, Analytics, Settings + Onboarding + Landing |
+| **Design System** | Dark/light CSS tokens, Tailwind config with custom colors, `shadow-panel`, status badge, metric card, section card, score chart components |
+
+---
+
+## What's Missing — Feature by Feature
+
+### 🔴 CRITICAL: UI is Read-Only / No Client Interactivity
+
+This is the **#1 systemic issue**. Every page renders server-side data, but **none of the buttons actually do anything**. All forms and buttons are inert HTML elements with no `onClick`, no form `action`, no API calls.
+
+| Page | Buttons That Don't Work |
+|---|---|
+| **Prompts** | "New Version" button — no modal/form to create a prompt version. "Compare" button — no diff viewer. Provider/model/temp selects — no state. Editor textarea — no save action. No publish/archive buttons |
+| **Datasets** | "Import CSV" button — no file upload flow. "Add Case" button — no modal. "Run Dataset" button — no action |
+| **Runs** | "Start Run" button — no action. Run builder selects — no state/options populated from DB. "Queue Evaluation" — dead. "Retry Failed" — dead. "Cancel" — dead. "Export" — not wired |
+| **Traces** | No span click-to-expand. No trace selection. No compare view. Timeline items are not clickable |
+| **Grading** | Review sliders — no submission. "Needs Fix" / "Approve" buttons — dead. No auto-grade trigger |
+| **Comparisons** | No way to create a new comparison report from the UI. "Approve Release" not present |
+| **Analytics** | Audit log screen missing entirely. Search across entities not wired |
+| **Settings** | No workspace member management UI. No billing/Stripe integration UI. No API key management. No model defaults editor |
+| **Dashboard** | Onboarding checklist items are not interactive/tracked |
+| **App Shell** | Mobile hamburger menu doesn't open. Search bar is display-only. Workspace switcher doesn't switch |
+
+---
+
+### 🔴 Phase 2 — Prompt Registry Gaps
+
+Per the PRD and App Flow docs:
+
+- [ ] **Prompt editor page** — The doc specifies "left metadata panel, center editor, right live preview and test runner." Current page has a static textarea, not an interactive editor
+- [ ] **Create new version flow** — Should duplicate latest version into editor form, save creates immutable row. Currently: button is inert
+- [ ] **Publish/archive actions** — API routes exist (`/api/prompts/[id]/publish`, `/api/prompts/[id]/archive`) but UI has no buttons wired to them
+- [ ] **Version comparison UI** — API exists (`/api/prompts/compare`) but no side-by-side diff viewer
+- [ ] **Prompt list filtering** — Doc specifies "versions, tags, status, model assignment, and last run score" filters. None implemented
+- [ ] **Live preview with test runner** — Doc specifies right-side live preview. Static only
+
+---
+
+### 🔴 Phase 3 — Dataset Manager Gaps
+
+- [ ] **Create dataset form** — No UI to create a new dataset (API exists)
+- [ ] **Add test case modal** — Doc specifies "modal for input, expected behavior, rubric, and metadata." Button exists but does nothing
+- [ ] **CSV import upload flow** — Doc specifies "upload flow and maps columns to fields." API route exists (`/api/datasets/import-csv`) but no file upload UI
+- [ ] **Dataset version snapshots** — Schema supports it but no UI flow
+- [ ] **Case editing/deactivation** — API exists but no inline editing UI
+- [ ] **Tag-based filtering and search** — Not implemented in UI
+
+---
+
+### 🔴 Phase 4 — Run Executor Gaps
+
+- [ ] **Run builder form** — Selects exist but are not populated from actual prompts/datasets/models from the database
+- [ ] **Start run → API call** — "Queue Evaluation" button doesn't call `POST /api/runs`
+- [ ] **Real-time progress updates** — TRD specifies Supabase Realtime. No client-side polling or subscription
+- [ ] **Retry failed** — Button doesn't call `POST /api/runs/[id]/retry-failed`
+- [ ] **Cancel run** — Button doesn't call `POST /api/runs/[id]/cancel`
+- [ ] **Export JSON/CSV** — Button doesn't call `GET /api/runs/[id]/export`
+- [ ] **Run detail page** — Shows first run only, no individual run navigation (`/runs/[id]`)
+- [ ] **Clicking a case → trace viewer** — No navigation link
+
+---
+
+### 🔴 Phase 5 — Trace Capture Gaps
+
+- [ ] **Trace viewer with collapsible spans** — Current UI is flat list, no expandable/collapsible tree
+- [ ] **Click span → expand raw I/O, latency, metadata** — Not interactive
+- [ ] **Output diffing** — Not implemented
+- [ ] **Retry inspection** — Not implemented
+- [ ] **Link from run item → trace** — No navigation
+
+---
+
+### 🔴 Phase 6 — Grading and Review Gaps
+
+- [ ] **Human review submission** — Sliders and buttons don't submit to `POST /api/grading/reviews`
+- [ ] **Auto-grade trigger** — No UI button to call `POST /api/grading/auto-grade`
+- [ ] **Grader definition management** — No CRUD UI for grader definitions (schema + seed exist)
+- [ ] **Review status tracking** — Items show static "pending" status
+- [ ] **Rubric-based scoring** — Rubric sliders don't map to actual rubric fields
+
+---
+
+### 🔴 Phase 7 — Comparison & Release Gates Gaps
+
+- [ ] **Create comparison report** — No UI form to select baseline and candidate runs (API exists)
+- [ ] **Metric distribution charts** — Doc specifies "two-column diff plus metric chart strip." No charts
+- [ ] **Release gate approval button** — No "Approve Release" button that calls `POST /api/releases/approve`
+- [ ] **Block shipping explanation** — Gate shows pass/fail but no detailed failing metric breakdown
+
+---
+
+### 🔴 Phase 8 — Analytics & Observability Gaps
+
+- [ ] **Audit log screen** — No page to view audit logs (API route exists at `/api/audit-logs`)
+- [ ] **Usage charts** — Only score trend chart. Missing cost summaries, failure hotspots, model comparison charts
+- [ ] **Global search** — Top bar search is display-only text, not a functional search. API exists at `/api/search`
+- [ ] **Workspace health indicators** — Partially done via metric cards
+
+---
+
+### 🔴 Phase 9 — Billing & Quotas Gaps
+
+- [ ] **Stripe integration** — `.env.example` has Stripe vars but **no Stripe SDK is installed**, no checkout session logic exists
+- [ ] **Billing page** — Doc specifies "current usage, quota, and Stripe status." Not implemented
+- [ ] **Upgrade flow** — "Billing Upgrade → Stripe Checkout" per App Flow. Non-existent
+- [ ] **Quota gating UI** — Backend `BillingService.assertRunQuota()` works but no user-facing quota display
+- [ ] The billing checkout API route (`/api/billing/checkout`) exists but is a stub
+
+---
+
+### 🟡 Phase 10 — Polish & Hardening Gaps
+
+- [ ] **Loading states** — No loading skeletons, spinners, or suspense boundaries
+- [ ] **Error states** — No error boundaries or user-facing error UI beyond auth pages
+- [ ] **Accessibility** — Basic aria labels exist but no keyboard navigation for tables, modals, drawers
+- [ ] **Pagination** — No pagination on any list (runs, traces, prompts, datasets, cases)
+- [ ] **Mobile navigation** — Hamburger button has no click handler, sidebar doesn't collapse to drawer
+- [ ] **Framer Motion** — Listed as dependency but zero animations in the codebase
+- [ ] **shadcn/ui** — TRD specifies it but no shadcn components are installed or used
+- [ ] **TanStack Query** — Listed as dependency but never imported anywhere
+- [ ] **Empty states** — Some pages have empty states but most are minimal
+
+---
+
+### 🟡 TRD-Specified Architecture Issues
+
+| TRD Requirement | Current State |
+|---|---|
+| "Do not hardcode prompts inside components" | ✅ Prompts in DB |
+| "Every model call must store model name, temp, topP, tokens, latency, cost" | ✅ `ModelCall` model captures all |
+| "Batch runs should execute server-side and be resumable" | ⚠️ Worker runs but is not resumable — no job lock expiry/requeue |
+| "Traces should be stored incrementally" | ⚠️ Stored after full response, not streaming |
+| "Use pagination for logs, runs, traces, and test cases" | ❌ No pagination anywhere |
+| "Vector search should be hybrid: semantic + keyword" | ❌ pgvector extension enabled in RLS but no embeddings/vector search |
+| "Cache derived dashboard aggregates" | ❌ No caching |
+| "features/ for domain modules" | ❌ No features/ directory — everything is in services/ |
+| OpenAI as initial provider | Replaced with Gemini + Groq (valid deviation) |
+
+---
+
+### 🟡 UI/UX Doc Compliance
+
+| Requirement | Status |
+|---|---|
+| "Premium engineering tool: calm, precise, dense, modern" | ✅ Good foundation |
+| "Split panes for trace inspection" | ❌ Not implemented |
+| "Tabs for prompt versions, metrics, notes" | ❌ No tab components |
+| "Sticky table headers" | ⚠️ Only datasets page has `sticky top-0` |
+| "Motion only where it clarifies navigation" | ❌ Zero motion/transitions |
+| "Empty states should teach the next action" | ⚠️ Some exist but CTAs are dead buttons |
+| "Loading states should preserve layout" | ❌ No loading states |
+| "Keyboard navigable tables, drawers, modals" | ❌ No keyboard navigation |
+| Google Fonts (Inter) | ⚠️ Font specified in CSS but not imported from Google Fonts CDN |
+
+---
+
+## Is It Production-Ready?
+
+**No.** The codebase is a well-structured scaffold with correct backend wiring, but it fails the "Definition of Done" from the Implementation Plan doc:
+
+> _"The app can create a prompt, create a dataset, run an eval, inspect traces, score outputs, compare versions, and block a release when metrics fail."_
+
+Currently a user **cannot perform any of these actions through the UI**. They can only view pre-seeded/demo data. The backend APIs exist to support all these actions, but the frontend has no client-side interactivity.
+
+---
+
+## Open Questions
+
+> [!IMPORTANT]
+> **Priority question:** Should I wire up the existing APIs to the existing UI pages first (making all buttons functional), or do you want me to rebuild the UI with proper shadcn/ui components and interactive patterns from scratch?
+
+> [!IMPORTANT]
+> **Stripe:** The TRD mentions Stripe test mode billing. Do you want this implemented now, or deferred? There's no `stripe` package installed.
+
+> [!IMPORTANT]
+> **Deployment target:** Are you deploying to Vercel + Supabase? This affects how I handle the background worker (Vercel can't run long-running Node scripts — would need Supabase Edge Functions or a separate worker service).
+
+---
+
+## Proposed Development Sequence
+
+Based on document priorities and dependency ordering, I recommend this execution path:
+
+### Sprint 1 — Make It Interactive (Wire UI → API)
+1. Install shadcn/ui components (Dialog, Sheet, Tabs, Form, Table, Select, Toast, etc.)
+2. Add client-side forms for: Create Prompt Version, Create Dataset, Add Case, Import CSV
+3. Wire Run Builder → `POST /api/runs` with real prompt/dataset/model selection
+4. Wire Retry/Cancel/Export buttons
+5. Add publish/archive actions on prompts
+6. Wire grading review submission
+
+### Sprint 2 — Interactive Detail Pages
+1. Add `/runs/[id]` detail page with real-time progress
+2. Add interactive trace viewer with collapsible span tree
+3. Add comparison report creation form
+4. Wire release gate approval flow
+5. Add functional global search
+
+### Sprint 3 — Polish & Complete
+1. Add loading/error states, skeleton loaders
+2. Implement pagination across all lists
+3. Fix mobile nav (hamburger → drawer)
+4. Add Framer Motion transitions
+5. Wire workspace switcher
+6. Implement audit log viewer page
+7. Expand analytics charts
+
+### Sprint 4 — Production Hardening
+1. Add Stripe billing integration (if desired)
+2. Add proper error boundaries
+3. Add more comprehensive tests
+4. Import Google Fonts properly
+5. Accessibility audit & fixes
+6. Worker resilience (lock expiry, dead letter queue)
+
+## Verification Plan
+
+### Automated Tests
+- `npm run test` — existing Vitest tests pass
+- `npm run typecheck` — TypeScript compiles without errors
+- `npm run lint` — ESLint passes
+- `npm run build` — Production build succeeds
+
+### Manual Verification
+- Complete user journey: Sign up → Create workspace → Create prompt → Create dataset → Start run → View trace → Grade → Compare → Approve release
+- Browser testing for interactive flows using the browser tool
