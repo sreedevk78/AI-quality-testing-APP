@@ -7,6 +7,7 @@ import { formatPercent } from "@/lib/utils";
 import { getDatasetPageData, getFirstProjectId } from "@/server/page-data";
 import { getPageRequestContext } from "@/server/page-context";
 import { DatasetToolbar, AddCaseButton } from "@/components/datasets/dataset-toolbar";
+import { InlineCaseEditor, DatasetSnapshotButton } from "@/components/datasets/case-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,10 @@ export default async function DatasetsPage() {
         action={<DatasetToolbar projectId={projectId} datasetId={dataset?.id} />}
       />
       <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
-        <SectionCard title="Active suite">
+        <SectionCard 
+          title="Active suite"
+          action={dataset && <DatasetSnapshotButton datasetId={dataset.id} />}
+        >
           {dataset ? (
             <>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
@@ -44,28 +48,19 @@ export default async function DatasetsPage() {
                       <th className="pb-3 font-medium">Expected behavior</th>
                       <th className="pb-3 font-medium">Difficulty</th>
                       <th className="pb-3 font-medium">Tags</th>
-                      <th className="pb-3 font-medium">Status</th>
+                      <th className="pb-3 font-medium px-2">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
                     {dataset.cases.map((item) => (
-                      <tr key={item.id}>
-                        <td className="py-3">
-                          <div className="font-medium">{item.name}</div>
-                          <div className="text-xs text-muted-foreground">{item.input}</div>
-                        </td>
-                        <td className="max-w-md py-3 text-muted-foreground">{item.expected}</td>
-                        <td className="py-3 capitalize">{item.difficulty}</td>
-                        <td className="py-3">{item.tags.join(", ")}</td>
-                        <td className="py-3"><StatusBadge status={item.status} /></td>
-                      </tr>
+                      <InlineCaseEditor key={item.id} item={item} />
                     ))}
                   </tbody>
                 </table>
               </div>
             </>
           ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/25 p-8">
+            <div className="rounded-lg border border-dashed border-border bg-muted/25 p-8 text-center">
               <h2 className="font-semibold">No datasets yet</h2>
               <p className="mt-2 text-sm text-muted-foreground">Import a CSV or create the first suite before queueing an evaluation run.</p>
             </div>

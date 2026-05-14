@@ -168,17 +168,30 @@ export async function getReviewPageData(workspaceId = DEMO_WORKSPACE_ID) {
         orderBy: { updatedAt: "desc" }
       });
       return rows.map(
-        (item): ReviewItem => ({
-          id: item.id,
-          caseName: JSON.stringify(item.datasetCase.inputPayloadJson),
-          run: item.run.modelName,
-          score: Number(item.score ?? 0),
-          rubric: JSON.stringify(item.datasetCase.rubricJson),
-          status: "pending"
+        (row): ReviewItem => ({
+          id: row.id,
+          caseName: JSON.stringify(row.datasetCase.inputPayloadJson).slice(0, 50),
+          run: `${row.run.provider} / ${row.run.modelName}`,
+          runId: row.runId,
+          score: Number(row.score ?? 0),
+          rubric: JSON.stringify(row.datasetCase.rubricJson).slice(0, 100),
+          status: row.status === "passed" ? "pass" : row.status === "failed" ? "fail" : "warning"
         })
       );
     },
     reviewQueue
+  );
+}
+
+export async function getGraderDefinitions(workspaceId = DEMO_WORKSPACE_ID) {
+  return withFallback(
+    async () => {
+      return prisma.graderDefinition.findMany({
+        where: { workspaceId },
+        orderBy: { createdAt: "desc" }
+      });
+    },
+    [] // default to empty for demo
   );
 }
 
@@ -187,6 +200,10 @@ export async function getComparisonPageData(workspaceId = DEMO_WORKSPACE_ID) {
     async () => {
       const rows = await prisma.comparisonReport.findMany({
         where: { workspaceId },
+        include: {
+          candidateRun: { select: { promptVersionId: true, id: true } },
+          baselineRun: { select: { id: true } }
+        },
         orderBy: { createdAt: "desc" }
       });
       return rows.map(
@@ -194,13 +211,17 @@ export async function getComparisonPageData(workspaceId = DEMO_WORKSPACE_ID) {
           const summary = row.metricSummaryJson as Record<string, number>;
           return {
             id: row.id,
-            baseline: row.baselineId,
-            candidate: row.candidateId,
+            baseline: row.baselineId.slice(0, 8),
+            candidate: row.candidateId.slice(0, 8),
             passFailStatus: row.passFailStatus === "pass" ? "pass" : "fail",
             scoreDelta: Number(summary.scoreDelta ?? 0),
             latencyDelta: Number(summary.latencyDelta ?? 0),
             costDelta: Number(summary.costDelta ?? 0),
-            threshold: Number(summary.threshold ?? 0.85)
+            threshold: Number(summary.threshold ?? 0.85),
+            candidatePromptVersionId: row.candidateRun?.promptVersionId ?? undefined,
+            candidateRunId: row.candidateRun?.id,
+            baselineScore: Number(summary.baselineScore ?? 0),
+            candidateScore: Number(summary.candidateScore ?? 0)
           };
         }
       );
@@ -283,6 +304,9 @@ function mapPrompt(row: {
   tags?: string[];
   changelog: string | null;
   updatedAt: Date;
+  systemPrompt: string;
+  userPromptTemplate: string;
+  projectId: string;
 }): PromptVersion {
   const params = row.modelParamsJson as { temperature?: number };
   return {
@@ -297,7 +321,10 @@ function mapPrompt(row: {
     tags: row.tags ?? [],
     lastRunScore: 0,
     changelog: row.changelog ?? "",
-    updatedAt: row.updatedAt.toISOString()
+    updatedAt: row.updatedAt.toISOString(),
+    systemPrompt: row.systemPrompt,
+    userPromptTemplate: row.userPromptTemplate,
+    projectId: row.projectId
   };
 }
 

@@ -15,6 +15,9 @@ export type PromptVersion = {
   lastRunScore: number;
   changelog: string;
   updatedAt: string;
+  systemPrompt: string;
+  userPromptTemplate: string;
+  projectId: string;
 };
 
 export type DatasetCase = {
@@ -80,9 +83,10 @@ export type ReviewItem = {
   id: string;
   caseName: string;
   run: string;
+  runId: string;
   score: number;
   rubric: string;
-  status: "pending" | "reviewed";
+  status: "pending" | "reviewed" | "pass" | "fail" | "warning";
 };
 
 export type ComparisonReport = {
@@ -94,4 +98,8 @@ export type ComparisonReport = {
   latencyDelta: number;
   costDelta: number;
   threshold: number;
+  candidatePromptVersionId?: string;
+  candidateRunId?: string;
+  baselineScore: number;
+  candidateScore: number;
 };

@@ -15,6 +15,7 @@ import {
   TerminalSquare
 } from "lucide-react";
 import { MobileMenuButton, GlobalSearch } from "@/components/shell/client-shell";
+import { PageTransition } from "@/components/shell/page-transition";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { signOut } from "@/app/(auth)/auth-actions";
@@ -33,11 +34,9 @@ const nav = [
   { href: "/settings", label: "Settings", icon: Settings }
 ];
 
-async function resolveShellIdentity(workspaceName?: string, userEmail?: string) {
-  if (workspaceName && userEmail) {
-    return { workspaceName, userEmail };
-  }
+import { WorkspaceSwitcher } from "@/components/shell/workspace-switcher";
 
+async function resolveShellIdentity(workspaceName?: string, userEmail?: string) {
   try {
     const supabase = await createSupabaseServerClient();
     const {
@@ -46,8 +45,9 @@ async function resolveShellIdentity(workspaceName?: string, userEmail?: string) 
 
     if (!user) {
       return {
-        workspaceName: workspaceName ?? "Workspace",
-        userEmail: userEmail ?? "Signed out"
+        workspaceName: workspaceName ?? "Demo Workspace",
+        userEmail: userEmail ?? "Signed out",
+        workspaces: [{ id: "demo", name: "Demo Workspace" }]
       };
     }
 
@@ -56,20 +56,23 @@ async function resolveShellIdentity(workspaceName?: string, userEmail?: string) 
       include: {
         memberships: {
           include: { workspace: true },
-          orderBy: { createdAt: "asc" },
-          take: 1
+          orderBy: { createdAt: "asc" }
         }
       }
     });
 
+    const workspaces = profile?.memberships.map(m => ({ id: m.workspace.id, name: m.workspace.name })) ?? [];
+
     return {
       workspaceName: workspaceName ?? profile?.memberships[0]?.workspace.name ?? "Workspace",
-      userEmail: userEmail ?? profile?.email ?? user.email ?? "Signed in"
+      userEmail: userEmail ?? profile?.email ?? user.email ?? "Signed in",
+      workspaces: workspaces.length > 0 ? workspaces : [{ id: "demo", name: "Demo Workspace" }]
     };
   } catch {
     return {
       workspaceName: workspaceName ?? "Workspace",
-      userEmail: userEmail ?? "Signed in"
+      userEmail: userEmail ?? "Signed in",
+      workspaces: [{ id: "demo", name: "Demo Workspace" }]
     };
   }
 }
@@ -128,9 +131,10 @@ export async function AppShell({
             </Link>
             <GlobalSearch />
             <div className="ml-auto flex items-center gap-2">
-              <button className="focus-ring inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm">
-                {identity.workspaceName}
-              </button>
+              <WorkspaceSwitcher 
+                currentWorkspace={identity.workspaceName} 
+                workspaces={identity.workspaces} 
+              />
               <div className="hidden items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground md:flex">
                 <UserCircle size={16} aria-hidden="true" />
                 {identity.userEmail}
@@ -150,7 +154,9 @@ export async function AppShell({
             </div>
           </div>
         </header>
-        <div className="px-4 py-6 lg:px-8">{children}</div>
+        <div className="px-4 py-6 lg:px-8">
+          <PageTransition>{children}</PageTransition>
+        </div>
       </main>
     </div>
   );

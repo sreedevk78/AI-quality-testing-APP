@@ -14,15 +14,17 @@ const variantClass: Record<ButtonVariant, string> = {
 
 type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
+  size?: "sm" | "md" | "lg";
   loading?: boolean;
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "primary", loading, className, children, disabled, ...props }, ref) => (
+  ({ variant = "primary", size = "md", loading, className, children, disabled, ...props }, ref) => (
     <button
       ref={ref}
       className={cn(
-        "focus-ring inline-flex items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50",
+        "focus-ring inline-flex items-center justify-center gap-2 rounded-md font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50",
+        size === "sm" ? "px-2 py-1 text-xs" : size === "lg" ? "px-4 py-3 text-base" : "px-3 py-2 text-sm",
         variantClass[variant],
         className
       )}

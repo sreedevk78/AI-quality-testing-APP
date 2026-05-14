@@ -36,6 +36,38 @@ export class GradingService {
     });
   }
 
+  getDefinitions(context: RequestContext) {
+    return prisma.graderDefinition.findMany({
+      where: { workspaceId: context.workspaceId },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+
+  createDefinition(
+    context: RequestContext,
+    input: { name: string; description?: string; type: string; provider: string; modelName: string; promptTemplate: string }
+  ) {
+    return prisma.graderDefinition.create({
+      data: {
+        workspaceId: context.workspaceId,
+        name: input.name,
+        description: input.description,
+        type: input.type,
+        provider: input.provider as any,
+        modelName: input.modelName,
+        promptTemplate: input.promptTemplate,
+        rubricJson: {},
+        createdBy: context.userId
+      }
+    });
+  }
+
+  deleteDefinition(context: RequestContext, id: string) {
+    return prisma.graderDefinition.delete({
+      where: { id, workspaceId: context.workspaceId }
+    });
+  }
+
   async autoGrade(context: RequestContext, input: { runItemId: string; graderDefinitionId: string }) {
     const [item, grader] = await Promise.all([
       prisma.runItem.findFirstOrThrow({
@@ -47,9 +79,9 @@ export class GradingService {
       })
     ]);
 
-    const provider = getProvider(grader.provider);
+    const provider = getProvider(grader.provider as any);
     const result = await provider.generateStructured<{ score: number; label: string; rationale: string }>({
-      provider: grader.provider,
+      provider: grader.provider as any,
       model: grader.modelName,
       temperature: 0,
       responseSchema: {

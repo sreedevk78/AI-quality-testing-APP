@@ -1,4 +1,4 @@
-import { Lock, Unlock } from "lucide-react";
+import { Lock, Unlock, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
@@ -7,6 +7,8 @@ import { formatCurrency, formatPercent } from "@/lib/utils";
 import { getComparisonPageData, getRunsPageData } from "@/server/page-data";
 import { getPageRequestContext } from "@/server/page-context";
 import { NewComparisonButton } from "@/components/comparisons/new-comparison-button";
+import { MetricDiffChart } from "@/components/comparisons/metric-diff-chart";
+import { ApproveReleaseButton } from "@/components/comparisons/comparison-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ export default async function ComparisonsPage() {
       <div className="grid gap-6 xl:grid-cols-2">
         {comparisonReports.length === 0 ? (
           <SectionCard title="No comparison reports">
-            <div className="rounded-lg border border-dashed border-border bg-muted/25 p-8">
+            <div className="rounded-lg border border-dashed border-border bg-muted/25 p-8 text-center">
               <h2 className="font-semibold">Release gates need a baseline and candidate</h2>
               <p className="mt-2 text-sm text-muted-foreground">Run two evaluations, then create a comparison report to approve or block a prompt release.</p>
             </div>
@@ -38,33 +40,58 @@ export default async function ComparisonsPage() {
             title={`${report.baseline} -> ${report.candidate}`}
             action={<StatusBadge status={report.passFailStatus} />}
           >
-            <div className="grid gap-4 md:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-3 mb-6">
               <div className="rounded-lg border border-border bg-muted/25 p-4">
-                <p className="text-xs text-muted-foreground">Score delta</p>
-                <p className="mt-2 text-2xl font-semibold">{report.scoreDelta > 0 ? "+" : ""}{formatPercent(report.scoreDelta)}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                  Score {report.scoreDelta >= 0 ? <ArrowUpRight size={10} className="text-success" /> : <ArrowDownRight size={10} className="text-danger" />}
+                </p>
+                <p className={`mt-2 text-2xl font-semibold ${report.scoreDelta >= 0 ? "text-success" : "text-danger"}`}>
+                  {report.scoreDelta > 0 ? "+" : ""}{formatPercent(report.scoreDelta)}
+                </p>
               </div>
               <div className="rounded-lg border border-border bg-muted/25 p-4">
-                <p className="text-xs text-muted-foreground">Latency delta</p>
-                <p className="mt-2 text-2xl font-semibold">{formatPercent(report.latencyDelta)}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                   Latency {report.latencyDelta <= 0 ? <ArrowDownRight size={10} className="text-success" /> : <ArrowUpRight size={10} className="text-danger" />}
+                </p>
+                <p className={`mt-2 text-2xl font-semibold ${report.latencyDelta <= 0 ? "text-success" : "text-danger"}`}>
+                  {formatPercent(report.latencyDelta)}
+                </p>
               </div>
               <div className="rounded-lg border border-border bg-muted/25 p-4">
-                <p className="text-xs text-muted-foreground">Cost delta</p>
-                <p className="mt-2 text-2xl font-semibold">{formatCurrency(report.costDelta)}</p>
+                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                   Cost {report.costDelta <= 0 ? <ArrowDownRight size={10} className="text-success" /> : <ArrowUpRight size={10} className="text-danger" />}
+                </p>
+                <p className={`mt-2 text-2xl font-semibold ${report.costDelta <= 0 ? "text-success" : "text-danger"}`}>
+                  {formatCurrency(report.costDelta)}
+                </p>
               </div>
             </div>
+
+            <div className="grid gap-6 md:grid-cols-2 mb-6 p-4 rounded-lg border border-border bg-muted/10">
+               <MetricDiffChart title="Quality Distribution" baseline={report.baselineScore} candidate={report.candidateScore} />
+               <MetricDiffChart title="Cost Performance" baseline={1} candidate={1 - (report.costDelta / Math.max(0.01, report.baselineScore + Math.abs(report.costDelta)))} unit="pts" />
+            </div>
+
             <div className="mt-5 rounded-lg border border-border bg-card p-4">
               <div className="flex items-start gap-3">
                 <div className="grid size-9 place-items-center rounded-md bg-primary/15 text-primary">
                   {report.passFailStatus === "pass" ? <Unlock size={18} /> : <Lock size={18} />}
                 </div>
-                <div>
+                <div className="flex-1">
                   <h2 className="font-semibold">
                     {report.passFailStatus === "pass" ? "Release gate unlocked" : "Release gate blocked"}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Threshold is {formatPercent(report.threshold)}. Failed metrics must be reviewed before production approval.
+                    Threshold is {formatPercent(report.threshold)}. {report.passFailStatus === "pass" ? "Ready for production approval." : "Improve candidate metrics to pass."}
                   </p>
                 </div>
+                {report.passFailStatus === "pass" && report.candidatePromptVersionId && (
+                  <ApproveReleaseButton 
+                    reportId={report.id} 
+                    promptVersionId={report.candidatePromptVersionId} 
+                    runId={report.candidateRunId} 
+                  />
+                )}
               </div>
             </div>
           </SectionCard>

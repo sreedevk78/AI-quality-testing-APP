@@ -61,6 +61,7 @@ model User {
   memberships   WorkspaceMember[]
   reviews       HumanReview[]
   usageEvents   UsageEvent[]
+  auditLogs     AuditLog[]
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
 
@@ -225,6 +226,8 @@ model Run {
   usageEvents     UsageEvent[]
   statusEvents    RunStatusEvent[]
   releaseApprovals ReleaseApproval[]
+  baselineReports ComparisonReport[] @relation("BaselineRun")
+  candidateReports ComparisonReport[] @relation("CandidateRun")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
 
@@ -349,6 +352,7 @@ model GraderDefinition {
   workspaceId    String        @map("workspace_id") @db.Uuid
   name           String
   description    String?
+  type           String        @default("llm_rubric")
   rubricJson     Json          @map("rubric_json")
   provider       ProviderName  @default(groq)
   modelName      String        @map("model_name")
@@ -412,6 +416,8 @@ model ComparisonReport {
   metricSummaryJson Json     @map("metric_summary_json")
   passFailStatus    String   @map("pass_fail_status")
   createdBy         String   @map("created_by") @db.Uuid
+  baselineRun       Run?     @relation("BaselineRun", fields: [baselineId], references: [id])
+  candidateRun      Run?     @relation("CandidateRun", fields: [candidateId], references: [id])
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -466,6 +472,7 @@ model AuditLog {
   action       String
   beforeJson   Json?    @map("before_json")
   afterJson    Json?    @map("after_json")
+  user         User?    @relation(fields: [actorUserId], references: [id])
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([workspaceId, entityType, entityId])

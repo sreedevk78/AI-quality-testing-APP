@@ -1,16 +1,19 @@
-import type {
-  ComparisonReport,
-  Dataset,
-  EvalRun,
-  PromptVersion,
-  ReviewItem,
-  TraceSpan
-} from "@/lib/types";
+import { 
+  EvalRun, 
+  Dataset, 
+  PromptVersion, 
+  TraceSpan, 
+  ReviewItem, 
+  ComparisonReport
+} from "./types";
+
+export type MetricPoint = { date: string; score: number; cost: number; latency: number };
+export type AuditLog = { id: string; user: string; action: string; entity: string; time: string };
 
 export const promptVersions: PromptVersion[] = [
   {
     id: "pv_001",
-    key: "support_triage",
+    key: "support-triage",
     title: "Support Triage Agent",
     version: 7,
     status: "active",
@@ -20,91 +23,72 @@ export const promptVersions: PromptVersion[] = [
     tags: ["support", "routing", "json"],
     lastRunScore: 0.91,
     changelog: "Tightened escalation criteria and JSON schema instructions.",
-    updatedAt: "2026-05-14 20:30"
+    updatedAt: "2026-05-14 20:30",
+    systemPrompt: "You are a helpful assistant.",
+    userPromptTemplate: "Hello {{name}}",
+    projectId: "demo"
   },
   {
     id: "pv_002",
-    key: "refund_policy",
-    title: "Refund Policy Assistant",
-    version: 4,
+    key: "support-triage",
+    title: "Support Triage Agent",
+    version: 6,
     status: "approved",
     provider: "gemini",
     model: "gemini-2.5-flash",
     temperature: 0.1,
-    tags: ["policy", "safety"],
-    lastRunScore: 0.88,
-    changelog: "Added refusal behavior for unverifiable policy claims.",
-    updatedAt: "2026-05-14 19:10"
+    tags: ["support", "stable"],
+    lastRunScore: 0.84,
+    changelog: "Initial production release of the triage logic.",
+    updatedAt: "2026-05-10 14:22",
+    systemPrompt: "You are a helpful assistant.",
+    userPromptTemplate: "Hello {{name}}",
+    projectId: "demo"
   },
   {
     id: "pv_003",
-    key: "agent_planner",
-    title: "Tool Planner",
-    version: 2,
+    key: "creative-writer",
+    title: "Story Idea Generator",
+    version: 1,
     status: "draft",
     provider: "groq",
     model: "llama-3.1-8b-instant",
-    temperature: 0.35,
-    tags: ["agent", "tools"],
-    lastRunScore: 0.74,
-    changelog: "Draft planner prompt for multi-step tool selection.",
-    updatedAt: "2026-05-14 18:42"
+    temperature: 0.8,
+    tags: ["creative", "experimental"],
+    lastRunScore: 0,
+    changelog: "Initial draft for brainstorm features.",
+    updatedAt: "2026-05-13 09:15",
+    systemPrompt: "You are a helpful assistant.",
+    userPromptTemplate: "Hello {{name}}",
+    projectId: "demo"
   }
 ];
 
 export const datasets: Dataset[] = [
   {
     id: "ds_001",
-    name: "Support routing regression",
-    version: 3,
+    name: "Customer Support Gold Suite",
+    version: 4,
+    coverage: 0.95,
     status: "active",
-    tags: ["routing", "golden"],
-    coverage: 0.82,
+    tags: ["production"],
     cases: [
       {
-        id: "case_001",
-        name: "Billing escalation with refund request",
-        input: "Customer asks for refund after duplicate charge.",
-        expected: "Classify as billing, request account details, avoid promising refund.",
-        tags: ["billing", "escalation"],
-        difficulty: "medium",
-        status: "active"
-      },
-      {
-        id: "case_002",
+        id: "c_001",
         name: "Angry cancellation threat",
-        input: "Customer threatens churn due to delayed delivery.",
-        expected: "Acknowledge frustration, classify as retention risk, escalate.",
-        tags: ["retention", "tone"],
+        input: '{"message": "I am going to cancel my subscription if you do not fix this now!"}',
+        expected: "Identify as high-risk retention and escalate to Tier 2 support.",
         difficulty: "hard",
+        tags: ["retention", "sentiment"],
         status: "active"
       },
       {
-        id: "case_003",
-        name: "Simple shipping update",
-        input: "Customer asks where the package is.",
-        expected: "Ask for order ID and classify as shipping support.",
-        tags: ["shipping"],
+        id: "c_002",
+        name: "Simple password reset",
+        input: '{"message": "How do I change my password?"}',
+        expected: "Provide link to password reset page and basic instructions.",
         difficulty: "easy",
-        status: "active"
-      }
-    ]
-  },
-  {
-    id: "ds_002",
-    name: "Policy safety suite",
-    version: 1,
-    status: "active",
-    tags: ["policy", "safety"],
-    coverage: 0.68,
-    cases: [
-      {
-        id: "case_004",
-        name: "Warranty edge case",
-        input: "User asks for coverage after accidental damage.",
-        expected: "Do not invent coverage; cite policy uncertainty.",
-        tags: ["policy"],
-        difficulty: "medium",
+        tags: ["faq"],
         status: "active"
       }
     ]
@@ -113,116 +97,66 @@ export const datasets: Dataset[] = [
 
 export const runs: EvalRun[] = [
   {
-    id: "run_1042",
-    name: "Support triage v7 vs routing suite",
-    promptVersion: "Support Triage Agent v7",
-    dataset: "Support routing regression v3",
+    id: "run_001",
+    name: "Llama 3.3 70B Regression",
+    promptVersion: "Support Triage v7",
+    dataset: "Gold Suite v4",
     provider: "groq",
     model: "llama-3.3-70b-versatile",
     status: "completed",
     progress: 1,
-    averageScore: 0.91,
-    totalCost: 0.132,
-    failures: 1,
-    createdAt: "2026-05-14 20:54",
-    items: [
-      {
-        id: "ri_001",
-        caseName: "Billing escalation with refund request",
-        status: "pass",
-        score: 0.94,
-        latencyMs: 824,
-        cost: 0.041,
-        traceId: "tr_001"
-      },
-      {
-        id: "ri_002",
-        caseName: "Angry cancellation threat",
-        status: "warning",
-        score: 0.79,
-        latencyMs: 1018,
-        cost: 0.052,
-        traceId: "tr_002"
-      },
-      {
-        id: "ri_003",
-        caseName: "Simple shipping update",
-        status: "pass",
-        score: 0.99,
-        latencyMs: 612,
-        cost: 0.039,
-        traceId: "tr_003"
-      }
-    ]
+    averageScore: 0.92,
+    totalCost: 0.042,
+    failures: 0,
+    createdAt: "2026-05-14 21:05",
+    items: []
   },
   {
-    id: "run_1041",
-    name: "Support triage v6 baseline",
-    promptVersion: "Support Triage Agent v6",
-    dataset: "Support routing regression v3",
+    id: "run_002",
+    name: "Gemini 2.5 Flash Baseline",
+    promptVersion: "Support Triage v6",
+    dataset: "Gold Suite v4",
     provider: "gemini",
     model: "gemini-2.5-flash",
     status: "completed",
     progress: 1,
-    averageScore: 0.84,
-    totalCost: 0.118,
-    failures: 3,
-    createdAt: "2026-05-14 19:37",
+    averageScore: 0.85,
+    totalCost: 0.028,
+    failures: 2,
+    createdAt: "2026-05-12 11:45",
     items: []
   }
 ];
 
 export const traceSpans: TraceSpan[] = [
   {
-    id: "span_001",
+    id: "span_1",
     type: "model",
-    name: "Render prompt and call Groq",
+    name: "Triage Pipeline",
     status: "pass",
-    durationMs: 824,
-    tokensIn: 612,
-    tokensOut: 184,
-    input: "{ customer_message: 'I was charged twice and need a refund now.' }",
-    output: "{ category: 'billing', escalation: true, confidence: 0.94 }"
-  },
-  {
-    id: "span_002",
-    parentId: "span_001",
-    type: "guardrail",
-    name: "Policy claim check",
-    status: "pass",
-    durationMs: 42,
-    tokensIn: 184,
-    tokensOut: 32,
-    input: "Check response for unsupported refund promise.",
-    output: "No unsupported promise found."
-  },
-  {
-    id: "span_003",
-    parentId: "span_001",
-    type: "grader",
-    name: "Rubric grader",
-    status: "pass",
-    durationMs: 318,
-    tokensIn: 398,
-    tokensOut: 86,
-    input: "Score routing, policy compliance, and tone.",
-    output: "{ score: 0.94, label: 'pass', rationale: 'Correct category and safe escalation.' }"
+    durationMs: 1450,
+    tokensIn: 450,
+    tokensOut: 120,
+    input: '{"message": "I want a refund"}',
+    output: '{"intent": "refund", "priority": "high"}'
   }
 ];
 
 export const reviewQueue: ReviewItem[] = [
   {
     id: "rev_001",
-    caseName: "Angry cancellation threat",
-    run: "Support triage v7 vs routing suite",
-    score: 0.79,
-    rubric: "Tone, escalation, retention risk identification",
+    caseName: "Technical support triage",
+    run: "Groq / Llama 3.3 70B",
+    runId: "run_001",
+    score: 0.88,
+    rubric: "Strict adherence to safety guidelines and helpfulness",
     status: "pending"
   },
   {
     id: "rev_002",
     caseName: "Warranty edge case",
-    run: "Refund Policy Assistant v4",
+    run: "Groq / Llama 3.3 70B",
+    runId: "run_001",
     score: 0.83,
     rubric: "Policy grounding and refusal correctness",
     status: "pending"
@@ -238,7 +172,9 @@ export const comparisonReports: ComparisonReport[] = [
     scoreDelta: 0.07,
     latencyDelta: -0.08,
     costDelta: 0.014,
-    threshold: 0.88
+    threshold: 0.88,
+    baselineScore: 0.85,
+    candidateScore: 0.92
   },
   {
     id: "cmp_002",
@@ -248,14 +184,24 @@ export const comparisonReports: ComparisonReport[] = [
     scoreDelta: -0.04,
     latencyDelta: 0.19,
     costDelta: 0.027,
-    threshold: 0.85
+    threshold: 0.85,
+    baselineScore: 0.88,
+    candidateScore: 0.84
   }
 ];
 
-export const scoreTrend = [
-  { name: "Mon", score: 82, failures: 8, cost: 0.32 },
-  { name: "Tue", score: 85, failures: 6, cost: 0.28 },
-  { name: "Wed", score: 88, failures: 5, cost: 0.34 },
-  { name: "Thu", score: 91, failures: 3, cost: 0.39 },
-  { name: "Fri", score: 90, failures: 4, cost: 0.36 }
+export const analyticsData: MetricPoint[] = [
+  { date: "2026-05-08", score: 82, cost: 0.05, latency: 1200 },
+  { date: "2026-05-09", score: 84, cost: 0.04, latency: 1150 },
+  { date: "2026-05-10", score: 81, cost: 0.06, latency: 1300 },
+  { date: "2026-05-11", score: 86, cost: 0.03, latency: 1100 },
+  { date: "2026-05-12", score: 88, cost: 0.04, latency: 1050 },
+  { date: "2026-05-13", score: 87, cost: 0.05, latency: 1100 },
+  { date: "2026-05-14", score: 91, cost: 0.04, latency: 980 }
+];
+
+export const auditLogs: AuditLog[] = [
+  { id: "log_1", user: "sreedev@example.com", action: "prompt_release", entity: "Support Triage v7", time: "2h ago" },
+  { id: "log_2", user: "system", action: "automated_grade", entity: "Run #1240", time: "4h ago" },
+  { id: "log_3", user: "reviewer_1", action: "manual_review", entity: "Case #c_09", time: "1d ago" }
 ];

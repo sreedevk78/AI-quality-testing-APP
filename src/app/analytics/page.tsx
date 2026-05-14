@@ -19,6 +19,11 @@ export default async function AnalyticsPage() {
       <PageTitle
         title="Analytics and observability"
         description="Score distributions, cost summaries, failure hotspots, model comparison, audit visibility, and workspace health."
+        action={
+          <a href="/analytics/audit-logs" className="focus-ring inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors">
+             View Audit Logs
+          </a>
+        }
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard label="Mean score" value={formatPercent(analytics.meanScore)} detail="Recent scored runs" icon={<Gauge size={18} />} />

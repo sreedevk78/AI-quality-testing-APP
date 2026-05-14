@@ -36,7 +36,9 @@ describe("release gates", () => {
         scoreDelta: 0.03,
         latencyDelta: -0.1,
         costDelta: 0.01,
-        threshold: 0.85
+        threshold: 0.85,
+        baselineScore: 0.82,
+        candidateScore: 0.85
       }).allowed
     ).toBe(true);
   });

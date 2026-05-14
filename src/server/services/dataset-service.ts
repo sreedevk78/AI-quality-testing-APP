@@ -141,4 +141,47 @@ export class DatasetService {
       data: { isActive: false }
     });
   }
+
+  async snapshot(context: RequestContext, datasetId: string) {
+    const source = await prisma.dataset.findFirstOrThrow({
+      where: { id: datasetId, workspaceId: context.workspaceId },
+      include: { cases: { where: { isActive: true } } }
+    });
+
+    const nextVersion = (source.versionNumber ?? 1) + 1;
+
+    return prisma.$transaction(async (tx) => {
+      // Mark current active as archived if needed, or just create new one
+      const copy = await tx.dataset.create({
+        data: {
+          workspaceId: context.workspaceId,
+          projectId: source.projectId,
+          name: source.name,
+          description: source.description,
+          status: "active",
+          versionNumber: nextVersion,
+          tags: source.tags,
+          createdBy: context.userId
+        }
+      });
+
+      if (source.cases.length > 0) {
+        await tx.datasetCase.createMany({
+          data: source.cases.map((c) => ({
+            workspaceId: context.workspaceId,
+            datasetId: copy.id,
+            inputPayloadJson: c.inputPayloadJson as any,
+            expectedOutputJson: c.expectedOutputJson as any,
+            rubricJson: c.rubricJson as any,
+            tags: c.tags,
+            difficulty: c.difficulty,
+            sourceReference: c.sourceReference,
+            createdBy: context.userId
+          }))
+        });
+      }
+
+      return copy;
+    });
+  }
 }
