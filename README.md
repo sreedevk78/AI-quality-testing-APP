@@ -6,6 +6,8 @@
 [![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css)](https://tailwindcss.com/)
 
+![Dashboard Mockup](./public/docs/mockup.png)
+
 > A professional-grade observability and evaluation platform for AI engineering. Test, trace, and gate your LLM applications with confidence.
 
 AI QA Evaluation Lab is a comprehensive workspace designed to solve the "vibes-based" testing problem in AI development. It provides a structured environment to version prompts, manage test datasets, execute evaluation runs, and inspect detailed execution traces before shipping to production.
