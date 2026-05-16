@@ -7,17 +7,26 @@ import { formatCurrency, formatPercent } from "@/lib/utils";
 import { getRunsPageData, getPromptPageData, getDatasetPageData } from "@/server/page-data";
 import { getPageRequestContext } from "@/server/page-context";
 import { RunBuilderForm, RunDetailActions } from "@/components/runs/run-actions";
+import { RunSelector } from "@/components/runs/run-selector";
 
 export const dynamic = "force-dynamic";
 
-export default async function RunsPage() {
+export default async function RunsPage({
+  searchParams
+}: {
+  searchParams: Promise<{ runId?: string }>;
+}) {
+  const params = await searchParams;
   const context = await getPageRequestContext();
   const [runs, prompts, datasets] = await Promise.all([
     getRunsPageData(context.workspaceId),
     getPromptPageData(context.workspaceId),
     getDatasetPageData(context.workspaceId),
   ]);
-  const run = runs[0];
+  
+  const run = params.runId 
+    ? (runs.find(r => r.id === params.runId) || runs[0])
+    : runs[0];
 
   return (
     <AppShell>
@@ -31,7 +40,12 @@ export default async function RunsPage() {
         </SectionCard>
         <SectionCard
           title="Run detail"
-          action={run ? <RunDetailActions runId={run.id} status={run.status} /> : undefined}
+          action={
+            <div className="flex items-center gap-2">
+                {run ? <RunSelector runs={runs.map(({ id, name, createdAt }) => ({ id, name, createdAt }))} selectedId={run.id} /> : null}
+                {run ? <RunDetailActions runId={run.id} status={run.status} /> : undefined}
+            </div>
+          }
         >
           {run ? (
             <>
@@ -66,8 +80,8 @@ export default async function RunsPage() {
                         <td className="py-3">{item.latencyMs} ms</td>
                         <td className="py-3">
                           {item.traceId ? (
-                            <Link href={`/traces/${item.traceId}`} className="text-primary hover:underline">{item.traceId.slice(0, 8)}…</Link>
-                          ) : <span className="text-muted-foreground">—</span>}
+                            <Link href={`/traces/${item.traceId}`} className="text-primary hover:underline">{item.traceId.slice(0, 8)}...</Link>
+                          ) : <span className="text-muted-foreground">-</span>}
                         </td>
                       </tr>
                     ))}
@@ -76,7 +90,7 @@ export default async function RunsPage() {
               </div>
             </>
           ) : (
-            <div className="rounded-lg border border-dashed border-border bg-muted/25 p-8">
+            <div className="rounded-lg border border-dashed border-border bg-muted/25 p-8 text-center">
               <h2 className="font-semibold">No runs queued</h2>
               <p className="mt-2 text-sm text-muted-foreground">Create a prompt version and dataset, then queue the first evaluation run.</p>
             </div>

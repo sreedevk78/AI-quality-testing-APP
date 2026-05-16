@@ -19,11 +19,13 @@ async function request<T>(
 ): Promise<ApiResult<T>> {
   try {
     const response = await fetch(url, {
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json", ...options.headers },
       ...options,
     });
 
-    const body = await response.json();
+    const text = await response.text();
+    const body = text ? parseResponseBody(text) : {};
 
     if (!response.ok || body.ok === false) {
       return {
@@ -69,9 +71,12 @@ export const api = {
 
   /** Download a file as blob and trigger browser download */
   async download(url: string, filename: string) {
-    const response = await fetch(url);
+    const response = await fetch(url, { credentials: "same-origin" });
     if (!response.ok) {
-      return { ok: false as const, error: `Download failed with ${response.status}`, status: response.status };
+      const text = await response.text().catch(() => "");
+      const body = text ? parseResponseBody(text) : {};
+      const error = typeof body === "object" && body && "error" in body ? String(body.error) : `Download failed with ${response.status}`;
+      return { ok: false as const, error, status: response.status };
     }
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
@@ -83,3 +88,11 @@ export const api = {
     return { ok: true as const, data: null };
   },
 };
+
+function parseResponseBody(text: string) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { ok: false, error: text.slice(0, 500) || "Unexpected non-JSON response" };
+  }
+}

@@ -1,4 +1,5 @@
 import { DatabaseZap } from "lucide-react";
+import Link from "next/link";
 import { AppShell } from "@/components/app-shell";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
@@ -7,17 +8,26 @@ import { formatPercent } from "@/lib/utils";
 import { getDatasetPageData, getFirstProjectId } from "@/server/page-data";
 import { getPageRequestContext } from "@/server/page-context";
 import { DatasetToolbar, AddCaseButton } from "@/components/datasets/dataset-toolbar";
-import { InlineCaseEditor, DatasetSnapshotButton } from "@/components/datasets/case-editor";
+import { DatasetExportButton, InlineCaseEditor, DatasetSnapshotButton } from "@/components/datasets/case-editor";
+import { DatasetSelector } from "@/components/datasets/dataset-selector";
 
 export const dynamic = "force-dynamic";
 
-export default async function DatasetsPage() {
+export default async function DatasetsPage({
+  searchParams
+}: {
+  searchParams: Promise<{ datasetId?: string }>;
+}) {
+  const params = await searchParams;
   const context = await getPageRequestContext();
   const [datasets, projectId] = await Promise.all([
     getDatasetPageData(context.workspaceId),
     getFirstProjectId(context.workspaceId),
   ]);
-  const dataset = datasets[0];
+  
+  const dataset = params.datasetId 
+    ? (datasets.find(d => d.id === params.datasetId) || datasets[0])
+    : datasets[0];
 
   return (
     <AppShell>
@@ -29,14 +39,22 @@ export default async function DatasetsPage() {
       <div className="grid gap-6 xl:grid-cols-[1fr_22rem]">
         <SectionCard 
           title="Active suite"
-          action={dataset && <DatasetSnapshotButton datasetId={dataset.id} />}
+          action={dataset && (
+            <div className="flex gap-2">
+              <DatasetExportButton datasetId={dataset.id} />
+              <DatasetSnapshotButton datasetId={dataset.id} />
+            </div>
+          )}
         >
           {dataset ? (
             <>
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="font-semibold">{dataset.name}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">v{dataset.version} / {formatPercent(dataset.coverage)} coverage</p>
+                <div className="flex items-center gap-4">
+                  <div>
+                    <h2 className="font-semibold">{dataset.name}</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">v{dataset.version} / {formatPercent(dataset.coverage)} coverage</p>
+                  </div>
+                  <DatasetSelector datasets={datasets.map(({ id, name }) => ({ id, name }))} selectedId={dataset.id} />
                 </div>
                 <StatusBadge status={dataset.status} />
               </div>
@@ -78,7 +96,7 @@ export default async function DatasetsPage() {
               </p>
             </div>
             {dataset && <AddCaseButton datasetId={dataset.id} />}
-            <a href="/runs" className="focus-ring block w-full rounded-md bg-primary px-3 py-2 text-center text-sm font-medium text-primary-foreground">Run Dataset</a>
+            <Link href="/runs" className="focus-ring block w-full rounded-md bg-primary px-3 py-2 text-center text-sm font-medium text-primary-foreground">Run Dataset</Link>
           </div>
         </SectionCard>
       </div>

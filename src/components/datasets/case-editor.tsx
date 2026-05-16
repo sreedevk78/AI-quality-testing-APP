@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Edit2, Save, X, Trash2 } from "lucide-react";
+import { Download, Edit2, Save, X } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Select } from "@/components/ui/form-field";
+import type { DatasetCase } from "@/lib/types";
 
-export function InlineCaseEditor({ item }: { item: any }) {
+type CaseDifficulty = "easy" | "medium" | "hard";
+
+export function InlineCaseEditor({ item }: { item: DatasetCase }) {
   const router = useRouter();
   const { success, error } = useToast();
   const [editing, setEditing] = useState(false);
@@ -16,7 +19,7 @@ export function InlineCaseEditor({ item }: { item: any }) {
   const [form, setForm] = useState({
     inputPayload: item.input,
     expectedOutput: item.expected,
-    difficulty: item.difficulty,
+    difficulty: item.difficulty as CaseDifficulty,
     tags: item.tags.join(", "),
   });
 
@@ -53,7 +56,7 @@ export function InlineCaseEditor({ item }: { item: any }) {
            <Textarea className="text-xs h-20" value={form.expectedOutput} onChange={(e) => setForm({ ...form, expectedOutput: e.target.value })} />
         </td>
         <td className="py-3 px-2">
-           <Select className="text-xs" value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value })}>
+           <Select className="text-xs" value={form.difficulty} onChange={(e) => setForm({ ...form, difficulty: e.target.value as CaseDifficulty })}>
              <option value="easy">Easy</option>
              <option value="medium">Medium</option>
              <option value="hard">Hard</option>
@@ -110,6 +113,29 @@ export function DatasetSnapshotButton({ datasetId }: { datasetId: string }) {
   return (
     <Button variant="secondary" onClick={handleSnapshot} loading={loading} className="text-xs h-8 px-3">
       Snapshot Version
+    </Button>
+  );
+}
+
+export function DatasetExportButton({ datasetId }: { datasetId: string }) {
+  const { success, error } = useToast();
+  const [loading, setLoading] = useState(false);
+
+  async function handleExport() {
+    setLoading(true);
+    const result = await api.download(`/api/datasets/${datasetId}/export`, `dataset-${datasetId}.json`);
+    setLoading(false);
+    if (result.ok) {
+      success("Dataset export created");
+    } else {
+      error(result.error);
+    }
+  }
+
+  return (
+    <Button variant="secondary" onClick={handleExport} loading={loading} className="text-xs h-8 px-3">
+      <Download size={14} />
+      Export
     </Button>
   );
 }

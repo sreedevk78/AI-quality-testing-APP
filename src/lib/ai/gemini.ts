@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { fetchProvider, parseMaybeJson, providerErrorMessage } from "@/lib/ai/http";
 import { AIProviderError, type AIProvider, type AIRequest, type AIResponse, type AIUsage } from "@/lib/ai/types";
 
 type GeminiResponse = {
@@ -18,7 +19,8 @@ export class GeminiProvider implements AIProvider {
   name = "gemini" as const;
 
   async generate(request: AIRequest): Promise<AIResponse> {
-    if (!env.GEMINI_API_KEY) {
+    const apiKey = request.apiKey ?? env.GEMINI_API_KEY;
+    if (!apiKey) {
       throw new AIProviderError("GEMINI_API_KEY is not configured", this.name);
     }
 
@@ -43,8 +45,9 @@ export class GeminiProvider implements AIProvider {
       }
     };
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${request.model}:generateContent?key=${env.GEMINI_API_KEY}`,
+    const response = await fetchProvider(
+      this.name,
+      `https://generativelanguage.googleapis.com/v1beta/models/${request.model}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -53,7 +56,7 @@ export class GeminiProvider implements AIProvider {
     );
 
     if (!response.ok) {
-      throw new AIProviderError(`Gemini request failed with ${response.status}`, this.name, response.status);
+      throw await providerErrorMessage(this.name, response);
     }
 
     const raw = (await response.json()) as GeminiResponse;
@@ -93,12 +96,4 @@ function normalizeGeminiUsage(raw: GeminiResponse): AIUsage {
     outputTokens,
     totalTokens: raw.usageMetadata?.totalTokenCount ?? inputTokens + outputTokens
   };
-}
-
-function parseMaybeJson(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
 }

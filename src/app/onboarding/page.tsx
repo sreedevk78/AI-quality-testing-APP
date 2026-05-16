@@ -28,7 +28,7 @@ export default function OnboardingPage() {
             Optional team invite
             <input name="inviteEmail" className="focus-ring mt-2 w-full rounded-md border border-border bg-card px-3 py-2" placeholder="teammate@example.com" />
           </label>
-          <button className="focus-ring rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground md:w-fit">
+          <button type="submit" className="focus-ring rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground md:w-fit">
             Create Workspace
           </button>
         </form>

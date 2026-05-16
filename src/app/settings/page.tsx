@@ -1,15 +1,21 @@
-import { KeyRound, Shield, CreditCard, CheckCircle2 } from "lucide-react";
+import { KeyRound, Shield, CheckCircle2 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
 import { BillingButton } from "@/components/settings/billing-button";
+import { ProviderCredentialsManager } from "@/components/settings/provider-credentials-manager";
+import { getPageRequestContext } from "@/server/page-context";
+import { ProviderCredentialService } from "@/server/services/provider-credential-service";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const context = await getPageRequestContext();
+  const credentials = await new ProviderCredentialService().list(context);
   const groqConfigured = Boolean(process.env.GROQ_API_KEY);
   const geminiConfigured = Boolean(process.env.GEMINI_API_KEY);
+  const ollamaConfigured = Boolean(process.env.OLLAMA_BASE_URL);
 
   return (
     <AppShell>
@@ -23,7 +29,8 @@ export default function SettingsPage() {
             <div className="space-y-4">
               {[
                 { name: "Groq", configured: groqConfigured, env: "GROQ_API_KEY" },
-                { name: "Gemini", configured: geminiConfigured, env: "GEMINI_API_KEY" }
+                { name: "Gemini", configured: geminiConfigured, env: "GEMINI_API_KEY" },
+                { name: "Ollama", configured: ollamaConfigured, env: "OLLAMA_BASE_URL" }
               ].map((item) => (
                 <div key={item.env} className="flex items-center justify-between rounded-lg border border-border bg-muted/25 p-4">
                   <div className="flex items-center gap-3">
@@ -38,6 +45,7 @@ export default function SettingsPage() {
                   <StatusBadge status={item.configured ? "active" : "warning"} />
                 </div>
               ))}
+              <ProviderCredentialsManager initialCredentials={credentials} />
             </div>
           </SectionCard>
 

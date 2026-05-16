@@ -21,6 +21,7 @@ import type { ReactNode } from "react";
 import { signOut } from "@/app/(auth)/auth-actions";
 import { prisma } from "@/lib/prisma";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: Home },
@@ -46,6 +47,7 @@ async function resolveShellIdentity(workspaceName?: string, userEmail?: string) 
     if (!user) {
       return {
         workspaceName: workspaceName ?? "Demo Workspace",
+        workspaceId: "demo",
         userEmail: userEmail ?? "Signed out",
         workspaces: [{ id: "demo", name: "Demo Workspace" }]
       };
@@ -62,17 +64,36 @@ async function resolveShellIdentity(workspaceName?: string, userEmail?: string) 
     });
 
     const workspaces = profile?.memberships.map(m => ({ id: m.workspace.id, name: m.workspace.name })) ?? [];
+    const selectedWorkspaceId = (await cookies()).get("workspace_id")?.value;
+    const selectedMembership =
+      profile?.memberships.find((membership) => membership.workspace.id === selectedWorkspaceId) ??
+      profile?.memberships[0];
+    const workspaceId = selectedMembership?.workspace.id ?? workspaces[0]?.id ?? "demo";
+    const pendingReviewCount =
+      workspaceId === "demo"
+        ? 0
+        : await prisma.runItem.count({
+            where: {
+              workspaceId,
+              status: { in: ["needs_review", "warning"] },
+              reviews: { none: {} }
+            }
+          });
 
     return {
-      workspaceName: workspaceName ?? profile?.memberships[0]?.workspace.name ?? "Workspace",
+      workspaceName: workspaceName ?? selectedMembership?.workspace.name ?? "Workspace",
+      workspaceId,
       userEmail: userEmail ?? profile?.email ?? user.email ?? "Signed in",
-      workspaces: workspaces.length > 0 ? workspaces : [{ id: "demo", name: "Demo Workspace" }]
+      workspaces: workspaces.length > 0 ? workspaces : [{ id: "demo", name: "Demo Workspace" }],
+      pendingReviewCount
     };
   } catch {
     return {
       workspaceName: workspaceName ?? "Workspace",
+      workspaceId: "demo",
       userEmail: userEmail ?? "Signed in",
-      workspaces: [{ id: "demo", name: "Demo Workspace" }]
+      workspaces: [{ id: "demo", name: "Demo Workspace" }],
+      pendingReviewCount: 0
     };
   }
 }
@@ -87,6 +108,7 @@ export async function AppShell({
   userEmail?: string;
 }) {
   const identity = await resolveShellIdentity(workspaceName, userEmail);
+  const pendingReviewCount = identity.pendingReviewCount ?? 0;
 
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[17rem_1fr]">
@@ -105,10 +127,17 @@ export async function AppShell({
             <Link
               key={item.href}
               href={item.href}
-              className="focus-ring flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground"
+              className="focus-ring flex items-center justify-between gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition hover:bg-muted hover:text-foreground group"
             >
-              <item.icon size={17} aria-hidden="true" />
-              {item.label}
+              <div className="flex items-center gap-3">
+                <item.icon size={17} aria-hidden="true" />
+                {item.label}
+              </div>
+              {item.href === "/grading" && pendingReviewCount > 0 && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  {pendingReviewCount}
+                </span>
+              )}
             </Link>
           ))}
         </nav>
@@ -133,6 +162,7 @@ export async function AppShell({
             <div className="ml-auto flex items-center gap-2">
               <WorkspaceSwitcher 
                 currentWorkspace={identity.workspaceName} 
+                currentWorkspaceId={identity.workspaceId}
                 workspaces={identity.workspaces} 
               />
               <div className="hidden items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm text-muted-foreground md:flex">
@@ -147,7 +177,7 @@ export async function AppShell({
                 New Run
               </Link>
               <form action={signOut}>
-                <button className="focus-ring grid size-9 place-items-center rounded-md border border-border bg-card" aria-label="Sign out">
+                <button type="submit" className="focus-ring grid size-9 place-items-center rounded-md border border-border bg-card" aria-label="Sign out">
                   <LogOut size={16} aria-hidden="true" />
                 </button>
               </form>

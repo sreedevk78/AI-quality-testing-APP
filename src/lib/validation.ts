@@ -7,8 +7,9 @@ export const promptVersionSchema = z.object({
   systemPrompt: z.string().min(1),
   userPromptTemplate: z.string().min(1),
   variablesSchema: z.record(z.unknown()).default({}),
-  provider: z.enum(["gemini", "groq"]),
+  provider: z.enum(["gemini", "groq", "ollama"]),
   modelName: z.string().min(2),
+  tags: z.array(z.string().min(1).max(40)).max(12).default([]),
   modelParams: z.object({
     temperature: z.number().min(0).max(2).default(0.2),
     topP: z.number().min(0).max(1).default(1),
@@ -28,7 +29,7 @@ export const datasetCaseSchema = z.object({
 export const runBuilderSchema = z.object({
   promptVersionId: z.string().uuid(),
   datasetId: z.string().uuid(),
-  provider: z.enum(["gemini", "groq"]),
+  provider: z.enum(["gemini", "groq", "ollama"]),
   modelName: z.string().min(2),
   temperature: z.number().min(0).max(2),
   graderDefinitionId: z.string().uuid().optional()

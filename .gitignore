@@ -23,6 +23,8 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 dev-server*.log
+server-*.log
+worker-*.log
 *.tsbuildinfo
 
 # testing

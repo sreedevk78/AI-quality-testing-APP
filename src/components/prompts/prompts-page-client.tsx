@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { GitCompare } from "lucide-react";
 import { SectionCard } from "@/components/section-card";
 import { StatusBadge } from "@/components/status-badge";
 import { formatPercent } from "@/lib/utils";
@@ -9,7 +8,7 @@ import { PromptActions } from "@/components/prompts/prompt-actions";
 import { PromptEditor } from "@/components/prompts/prompt-editor";
 import type { PromptVersion } from "@/lib/types";
 
-export function PromptsPageClient({ initialPrompts }: { initialPrompts: PromptVersion[] }) {
+export function PromptsPageClient({ initialPrompts, projectId }: { initialPrompts: PromptVersion[]; projectId: string }) {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(initialPrompts[0]?.id ?? null);
   const selectedPrompt = initialPrompts.find(p => p.id === selectedPromptId);
 
@@ -59,7 +58,7 @@ export function PromptsPageClient({ initialPrompts }: { initialPrompts: PromptVe
       </SectionCard>
 
       <SectionCard title="Editor and live preview">
-        <PromptEditor initialPrompt={selectedPrompt} />
+        <PromptEditor initialPrompt={selectedPrompt} projectId={projectId} />
       </SectionCard>
     </div>
   );

@@ -1,6 +1,19 @@
-export type Status = "pass" | "warning" | "fail" | "queued" | "running" | "approved";
+export type Status =
+  | "pass"
+  | "warning"
+  | "fail"
+  | "queued"
+  | "initializing"
+  | "running"
+  | "retrying"
+  | "partially_failed"
+  | "needs_review"
+  | "completed"
+  | "failed"
+  | "cancelled"
+  | "approved";
 
-export type ProviderName = "gemini" | "groq";
+export type ProviderName = "gemini" | "groq" | "ollama";
 
 export type PromptVersion = {
   id: string;
@@ -57,7 +70,7 @@ export type EvalRun = {
   dataset: string;
   provider: ProviderName;
   model: string;
-  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  status: "queued" | "initializing" | "running" | "retrying" | "partially_failed" | "needs_review" | "completed" | "failed" | "cancelled";
   progress: number;
   averageScore: number;
   totalCost: number;
@@ -69,7 +82,7 @@ export type EvalRun = {
 export type TraceSpan = {
   id: string;
   parentId?: string;
-  type: "model" | "tool" | "guardrail" | "grader";
+  type: "root" | "model" | "retrieval" | "tool" | "guardrail" | "grader" | "review" | "error";
   name: string;
   status: Status;
   durationMs: number;
@@ -86,7 +99,10 @@ export type ReviewItem = {
   runId: string;
   score: number;
   rubric: string;
-  status: "pending" | "reviewed" | "pass" | "fail" | "warning";
+  status: "pending" | "reviewed" | "pass" | "fail" | "warning" | "needs_review";
+  input?: string;
+  output?: string;
+  expected?: string;
 };
 
 export type ComparisonReport = {

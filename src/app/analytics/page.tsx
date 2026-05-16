@@ -7,6 +7,7 @@ import { formatCurrency, formatPercent } from "@/lib/utils";
 import { getAnalyticsPageData } from "@/server/page-data";
 import { getPageRequestContext } from "@/server/page-context";
 import { AlertTriangle, CircleDollarSign, Gauge, SearchCheck } from "lucide-react";
+import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,9 @@ export default async function AnalyticsPage() {
         title="Analytics and observability"
         description="Score distributions, cost summaries, failure hotspots, model comparison, audit visibility, and workspace health."
         action={
-          <a href="/analytics/audit-logs" className="focus-ring inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors">
+          <Link href="/analytics/audit-logs" className="focus-ring inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-muted transition-colors">
              View Audit Logs
-          </a>
+          </Link>
         }
       />
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -31,9 +32,45 @@ export default async function AnalyticsPage() {
         <MetricCard label="Spend" value={formatCurrency(analytics.spend)} detail="Recorded provider usage" icon={<CircleDollarSign size={18} />} />
         <MetricCard label="Trace coverage" value={formatPercent(analytics.traceCoverage)} detail="Run items with completed traces" icon={<SearchCheck size={18} />} />
       </div>
+      <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <MetricCard label="Pass rate" value={formatPercent(analytics.passRate)} detail="Passed run items" icon={<Gauge size={18} />} />
+        <MetricCard label="Fail rate" value={formatPercent(analytics.failRate)} detail="Failed run items" icon={<AlertTriangle size={18} />} />
+        <MetricCard label="Retries" value={String(analytics.retryCount)} detail="Run items retried" icon={<SearchCheck size={18} />} />
+        <MetricCard label="Regressions" value={String(analytics.regressionCount)} detail="Detected comparison failures" icon={<AlertTriangle size={18} />} />
+      </div>
       <div className="mt-6">
         <SectionCard title="Score trend">
           <ScoreChart data={analytics.scoreTrend} />
+        </SectionCard>
+      </div>
+      <div className="mt-6">
+        <SectionCard title="Provider latency and cost">
+          {analytics.providerLatency.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No model calls have been recorded yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[640px] text-left text-sm">
+                <thead className="text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="pb-3 font-medium">Provider / model</th>
+                    <th className="pb-3 font-medium">Avg latency</th>
+                    <th className="pb-3 font-medium">Calls</th>
+                    <th className="pb-3 font-medium">Cost</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {analytics.providerLatency.map((row) => (
+                    <tr key={row.name}>
+                      <td className="py-3 font-medium">{row.name}</td>
+                      <td className="py-3">{row.latencyMs} ms</td>
+                      <td className="py-3">{row.calls}</td>
+                      <td className="py-3">{formatCurrency(row.cost)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </SectionCard>
       </div>
     </AppShell>

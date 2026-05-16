@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CopyPlus, CheckCircle2, Archive, X } from "lucide-react";
+import { CopyPlus, CheckCircle2, Archive, RotateCcw } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,13 @@ type CreatePromptModalProps = {
   projectId: string;
 };
 
+type PromptProvider = "groq" | "gemini" | "ollama";
+const defaultModels: Record<PromptProvider, string> = {
+  groq: "llama-3.3-70b-versatile",
+  gemini: "gemini-2.5-flash",
+  ollama: "llama3.1"
+};
+
 export function CreatePromptModal({ open, onClose, projectId }: CreatePromptModalProps) {
   const router = useRouter();
   const { success, error } = useToast();
@@ -25,12 +32,20 @@ export function CreatePromptModal({ open, onClose, projectId }: CreatePromptModa
     title: "",
     systemPrompt: "",
     userPromptTemplate: "",
-    provider: "groq" as "groq" | "gemini",
-    modelName: "llama-3.3-70b-versatile",
+    provider: "groq" as PromptProvider,
+    modelName: defaultModels.groq,
     temperature: 0.2,
+    tags: "",
   });
 
   const update = (key: string, value: string | number) => setForm((prev) => ({ ...prev, [key]: value }));
+  const updateProvider = (provider: PromptProvider) => {
+    setForm((prev) => ({
+      ...prev,
+      provider,
+      modelName: defaultModels[provider]
+    }));
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -45,6 +60,7 @@ export function CreatePromptModal({ open, onClose, projectId }: CreatePromptModa
       modelName: form.modelName,
       modelParams: { temperature: form.temperature, topP: 1 },
       variablesSchema: {},
+      tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
     });
     setLoading(false);
     if (result.ok) {
@@ -75,9 +91,10 @@ export function CreatePromptModal({ open, onClose, projectId }: CreatePromptModa
         </FieldWrapper>
         <div className="grid gap-4 md:grid-cols-3">
           <FieldWrapper label="Provider">
-            <Select value={form.provider} onChange={(e) => update("provider", e.target.value)}>
+            <Select value={form.provider} onChange={(e) => updateProvider(e.target.value as PromptProvider)}>
               <option value="groq">Groq</option>
               <option value="gemini">Gemini</option>
+              <option value="ollama">Ollama</option>
             </Select>
           </FieldWrapper>
           <FieldWrapper label="Model">
@@ -87,6 +104,9 @@ export function CreatePromptModal({ open, onClose, projectId }: CreatePromptModa
             <Input type="number" step="0.1" min="0" max="2" value={form.temperature} onChange={(e) => update("temperature", Number(e.target.value))} />
           </FieldWrapper>
         </div>
+        <FieldWrapper label="Tags">
+          <Input placeholder="routing, production" value={form.tags} onChange={(e) => update("tags", e.target.value)} />
+        </FieldWrapper>
         <ModalActions>
           <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
           <Button type="submit" loading={loading}>
@@ -120,6 +140,14 @@ export function PromptActions({ prompt }: { prompt: PromptVersion }) {
     else error(result.error);
   }
 
+  async function rollback() {
+    setLoading("rollback");
+    const result = await api.post(`/api/prompts/${prompt.id}/rollback`);
+    setLoading(null);
+    if (result.ok) { success(`Rollback draft created from ${prompt.title} v${prompt.version}`); router.refresh(); }
+    else error(result.error);
+  }
+
   return (
     <div className="mt-4 flex gap-2">
       {prompt.status !== "active" && prompt.status !== "approved" && (
@@ -132,6 +160,9 @@ export function PromptActions({ prompt }: { prompt: PromptVersion }) {
           <Archive size={14} /> Archive
         </Button>
       )}
+      <Button variant="ghost" onClick={rollback} loading={loading === "rollback"} className="text-xs px-2 py-1">
+        <RotateCcw size={14} /> Rollback
+      </Button>
     </div>
   );
 }

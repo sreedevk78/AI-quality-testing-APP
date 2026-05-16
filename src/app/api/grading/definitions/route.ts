@@ -9,9 +9,10 @@ const definitionSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional(),
   type: z.string().default("llm_rubric"),
-  provider: z.string().default("groq"),
+  provider: z.enum(["groq", "gemini", "ollama"]).default("groq"),
   modelName: z.string().default("llama-3.3-70b-versatile"),
-  promptTemplate: z.string().min(1)
+  promptTemplate: z.string().min(1),
+  rubricJson: z.record(z.unknown()).optional()
 });
 
 export async function GET(request: Request) {

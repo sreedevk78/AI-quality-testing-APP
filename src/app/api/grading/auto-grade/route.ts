@@ -5,15 +5,22 @@ import { GradingService } from "@/server/services/grading-service";
 
 const grading = new GradingService();
 const autoGradeSchema = z.object({
-  runItemId: z.string().uuid(),
-  graderDefinitionId: z.string().uuid()
+  runId: z.string().uuid().optional(),
+  runItemId: z.string().uuid().optional(),
+  graderDefinitionId: z.string().uuid().optional()
+}).refine((input) => input.runId || (input.runItemId && input.graderDefinitionId), {
+  message: "runId or runItemId with graderDefinitionId is required"
 });
 
 export async function POST(request: Request) {
   try {
     const context = await getRequestContext(request);
     assertCanReview(context);
-    return apiOk(await grading.autoGrade(context, autoGradeSchema.parse(await request.json())), { status: 201 });
+    const input = autoGradeSchema.parse(await request.json());
+    if (input.runId) {
+      return apiOk(await grading.autoGradeRun(context, { runId: input.runId, graderDefinitionId: input.graderDefinitionId }), { status: 201 });
+    }
+    return apiOk(await grading.autoGrade(context, { runItemId: input.runItemId!, graderDefinitionId: input.graderDefinitionId! }), { status: 201 });
   } catch (error) {
     return apiError(error);
   }

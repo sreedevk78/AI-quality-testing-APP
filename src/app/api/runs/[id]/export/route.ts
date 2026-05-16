@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { apiError } from "@/server/api";
 import { getRequestContext } from "@/server/context";
+import { EventService } from "@/server/services/event-service";
+
+const events = new EventService();
 
 export async function GET(request: Request, routeContext: { params: Promise<{ id: string }> }) {
   try {
@@ -17,6 +20,13 @@ export async function GET(request: Request, routeContext: { params: Promise<{ id
           }
         }
       }
+    });
+
+    await events.emit(context, {
+      entityType: "run",
+      entityId: id,
+      action: "export_created",
+      payload: { format: "json", itemCount: run.items.length }
     });
 
     return new Response(JSON.stringify(run, null, 2), {

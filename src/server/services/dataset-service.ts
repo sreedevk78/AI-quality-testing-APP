@@ -81,6 +81,11 @@ export class DatasetService {
   }
 
   async importCsv(context: RequestContext, input: { datasetId: string; csv: string }) {
+    const maxBytes = Number(process.env.DATASET_IMPORT_MAX_BYTES ?? 2_000_000);
+    if (Buffer.byteLength(input.csv, "utf8") > maxBytes) {
+      throw new RequestContextError(`CSV import is too large. Limit imports to ${Math.round(maxBytes / 1024 / 1024)}MB.`, 413);
+    }
+
     const dataset = await prisma.dataset.findFirst({
       where: { id: input.datasetId, workspaceId: context.workspaceId },
       select: { id: true }
@@ -100,21 +105,34 @@ export class DatasetService {
     }
 
     const rows = parsed.data.filter((row) => Object.keys(row).length > 0);
-    await prisma.datasetCase.createMany({
-      data: rows.map((row) => ({
-        workspaceId: context.workspaceId,
-        datasetId: input.datasetId,
-        inputPayloadJson: { message: row.input ?? row.message ?? "" } as Prisma.InputJsonValue,
-        expectedOutputJson: { expected: row.expected ?? row.expected_output ?? "" } as Prisma.InputJsonValue,
-        rubricJson: { rubric: row.rubric ?? "" } as Prisma.InputJsonValue,
-        tags: row.tags ? row.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [],
-        difficulty: row.difficulty ?? "medium",
-        sourceReference: row.source_reference,
-        createdBy: context.userId
-      }))
-    });
+    const BATCH_SIZE = 500;
+    let imported = 0;
 
-    return { imported: rows.length };
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+      const chunk = rows.slice(i, i + BATCH_SIZE);
+      await prisma.datasetCase.createMany({
+        data: chunk.map((row) => ({
+          workspaceId: context.workspaceId,
+          datasetId: input.datasetId,
+          inputPayloadJson: { 
+            message: row.input ?? row.message ?? row.prompt ?? row.query ?? row.text ?? "" 
+          } as Prisma.InputJsonValue,
+          expectedOutputJson: { 
+            expected: row.expected ?? row.expected_output ?? row.answer ?? row.output ?? "" 
+          } as Prisma.InputJsonValue,
+          rubricJson: { 
+            rubric: row.rubric ?? row.criteria ?? "" 
+          } as Prisma.InputJsonValue,
+          tags: row.tags ? row.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [],
+          difficulty: normalizeDifficulty(row.difficulty),
+          sourceReference: row.source_reference ?? row.id ?? row.ref,
+          createdBy: context.userId
+        }))
+      });
+      imported += chunk.length;
+    }
+
+    return { imported };
   }
 
   updateCase(
@@ -142,6 +160,39 @@ export class DatasetService {
     });
   }
 
+  async exportDataset(context: RequestContext, datasetId: string) {
+    const dataset = await prisma.dataset.findFirstOrThrow({
+      where: { id: datasetId, workspaceId: context.workspaceId },
+      include: {
+        cases: {
+          orderBy: { createdAt: "asc" }
+        }
+      }
+    });
+
+    return {
+      exportedAt: new Date().toISOString(),
+      dataset: {
+        id: dataset.id,
+        name: dataset.name,
+        description: dataset.description,
+        status: dataset.status,
+        versionNumber: dataset.versionNumber,
+        tags: dataset.tags
+      },
+      cases: dataset.cases.map((item) => ({
+        id: item.id,
+        inputPayload: item.inputPayloadJson,
+        expectedOutput: item.expectedOutputJson,
+        rubric: item.rubricJson,
+        tags: item.tags,
+        difficulty: item.difficulty,
+        sourceReference: item.sourceReference,
+        isActive: item.isActive
+      }))
+    };
+  }
+
   async snapshot(context: RequestContext, datasetId: string) {
     const source = await prisma.dataset.findFirstOrThrow({
       where: { id: datasetId, workspaceId: context.workspaceId },
@@ -166,22 +217,31 @@ export class DatasetService {
       });
 
       if (source.cases.length > 0) {
-        await tx.datasetCase.createMany({
-          data: source.cases.map((c) => ({
-            workspaceId: context.workspaceId,
-            datasetId: copy.id,
-            inputPayloadJson: c.inputPayloadJson as any,
-            expectedOutputJson: c.expectedOutputJson as any,
-            rubricJson: c.rubricJson as any,
-            tags: c.tags,
-            difficulty: c.difficulty,
-            sourceReference: c.sourceReference,
-            createdBy: context.userId
-          }))
-        });
+        const BATCH_SIZE = 500;
+        for (let i = 0; i < source.cases.length; i += BATCH_SIZE) {
+          const chunk = source.cases.slice(i, i + BATCH_SIZE);
+          await tx.datasetCase.createMany({
+            data: chunk.map((c) => ({
+              workspaceId: context.workspaceId,
+              datasetId: copy.id,
+              inputPayloadJson: c.inputPayloadJson as Prisma.InputJsonValue,
+              expectedOutputJson: c.expectedOutputJson as Prisma.InputJsonValue,
+              rubricJson: c.rubricJson as Prisma.InputJsonValue,
+              tags: c.tags,
+              difficulty: c.difficulty,
+              sourceReference: c.sourceReference,
+              createdBy: context.userId
+            }))
+          });
+        }
       }
 
       return copy;
     });
   }
+}
+
+function normalizeDifficulty(value: string | undefined) {
+  const normalized = value?.toLowerCase().trim();
+  return normalized === "easy" || normalized === "medium" || normalized === "hard" ? normalized : "medium";
 }

@@ -19,9 +19,10 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = "primary", size = "md", loading, className, children, disabled, ...props }, ref) => (
+  ({ variant = "primary", size = "md", loading, className, children, disabled, type, ...props }, ref) => (
     <button
       ref={ref}
+      type={type ?? "button"}
       className={cn(
         "focus-ring inline-flex items-center justify-center gap-2 rounded-md font-medium transition-opacity disabled:cursor-not-allowed disabled:opacity-50",
         size === "sm" ? "px-2 py-1 text-xs" : size === "lg" ? "px-4 py-3 text-base" : "px-3 py-2 text-sm",

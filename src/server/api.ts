@@ -18,6 +18,11 @@ export function apiError(error: unknown, status = 500) {
     return NextResponse.json({ ok: false, error: error.message }, { status: error.status });
   }
 
+  if (process.env.NODE_ENV === "production") {
+    console.error(error);
+    return NextResponse.json({ ok: false, error: "Unexpected server error" }, { status });
+  }
+
   const message = error instanceof Error ? error.message : "Unexpected server error";
   return NextResponse.json({ ok: false, error: message }, { status });
 }

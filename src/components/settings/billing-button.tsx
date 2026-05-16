@@ -12,7 +12,7 @@ export function BillingButton() {
 
   async function handleCheckout() {
     setLoading(true);
-    const result = await api.post<any>("/api/billing/checkout", {});
+    const result = await api.post<{ url?: string }>("/api/billing/checkout", {});
     setLoading(false);
     if (!result.ok) {
       error(result.error);

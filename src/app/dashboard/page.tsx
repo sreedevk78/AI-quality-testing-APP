@@ -1,5 +1,6 @@
 ﻿import { AlertTriangle, CheckCircle2, CircleDollarSign, Gauge } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
+import Link from "next/link";
 import { MetricCard } from "@/components/metric-card";
 import { PageTitle } from "@/components/page-title";
 import { SectionCard } from "@/components/section-card";
@@ -47,9 +48,9 @@ export default async function DashboardPage() {
         <SectionCard
           title="Recent runs"
           action={
-            <a className="text-sm font-medium text-primary" href="/runs">
+            <Link className="text-sm font-medium text-primary" href="/runs">
               View all
-            </a>
+            </Link>
           }
         >
           <div className="overflow-x-auto">

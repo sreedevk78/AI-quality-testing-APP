@@ -14,6 +14,8 @@ export type AIRequest = {
   seed?: number;
   maxOutputTokens?: number;
   responseSchema?: unknown;
+  apiKey?: string;
+  baseUrl?: string;
 };
 
 export type AIUsage = {

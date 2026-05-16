@@ -1,4 +1,5 @@
 import { env } from "@/lib/env";
+import { fetchProvider, parseMaybeJson, providerErrorMessage } from "@/lib/ai/http";
 import { AIProviderError, type AIProvider, type AIRequest, type AIResponse, type AIUsage } from "@/lib/ai/types";
 
 type GroqChoice = {
@@ -18,7 +19,8 @@ export class GroqProvider implements AIProvider {
   name = "groq" as const;
 
   async generate(request: AIRequest): Promise<AIResponse> {
-    if (!env.GROQ_API_KEY) {
+    const apiKey = request.apiKey ?? env.GROQ_API_KEY;
+    if (!apiKey) {
       throw new AIProviderError("GROQ_API_KEY is not configured", this.name);
     }
 
@@ -41,23 +43,17 @@ export class GroqProvider implements AIProvider {
         : undefined
     };
 
-    const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    const response = await fetchProvider(this.name, "https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${env.GROQ_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify(body)
     });
 
     if (!response.ok) {
-      const retryAfter = response.headers.get("retry-after");
-      throw new AIProviderError(
-        `Groq request failed with ${response.status}`,
-        this.name,
-        response.status,
-        retryAfter ? Number(retryAfter) * 1000 : undefined
-      );
+      throw await providerErrorMessage(this.name, response);
     }
 
     const raw = (await response.json()) as GroqResponse;
@@ -97,12 +93,4 @@ function normalizeGroqUsage(raw: GroqResponse): AIUsage {
     outputTokens,
     totalTokens: raw.usage?.total_tokens ?? inputTokens + outputTokens
   };
-}
-
-function parseMaybeJson(text: string) {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return undefined;
-  }
 }

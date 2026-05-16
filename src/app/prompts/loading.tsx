@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { PageTitle } from "@/components/page-title";
-import { Skeleton, CardSkeleton, TableSkeleton } from "@/components/ui/skeleton";
+import { Skeleton, CardSkeleton } from "@/components/ui/skeleton";
 
 export default function Loading() {
   return (

@@ -6,13 +6,19 @@ import { Play, RotateCcw, Square, Download } from "lucide-react";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { Button } from "@/components/ui/button";
-import { Modal, ModalActions } from "@/components/ui/modal";
 import { FieldWrapper, Input, Select } from "@/components/ui/form-field";
 import type { PromptVersion, Dataset } from "@/lib/types";
 
 type RunBuilderProps = {
   prompts: PromptVersion[];
   datasets: Dataset[];
+};
+
+type RunProvider = "groq" | "gemini" | "ollama";
+const defaultModels: Record<RunProvider, string> = {
+  groq: "llama-3.3-70b-versatile",
+  gemini: "gemini-2.5-flash",
+  ollama: "llama3.1"
 };
 
 export function RunBuilderForm({ prompts, datasets }: RunBuilderProps) {
@@ -22,13 +28,20 @@ export function RunBuilderForm({ prompts, datasets }: RunBuilderProps) {
   const [form, setForm] = useState({
     promptVersionId: prompts[0]?.id ?? "",
     datasetId: datasets[0]?.id ?? "",
-    provider: "groq" as "groq" | "gemini",
-    modelName: "llama-3.3-70b-versatile",
+    provider: "groq" as RunProvider,
+    modelName: defaultModels.groq,
     temperature: 0.2,
     graderDefinitionId: "",
   });
 
   const update = (key: string, value: string | number) => setForm((prev) => ({ ...prev, [key]: value }));
+  const updateProvider = (provider: RunProvider) => {
+    setForm((prev) => ({
+      ...prev,
+      provider,
+      modelName: defaultModels[provider]
+    }));
+  };
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -37,7 +50,7 @@ export function RunBuilderForm({ prompts, datasets }: RunBuilderProps) {
       return;
     }
     setLoading(true);
-    const result = await api.post("/api/runs", {
+    const result = await api.post<{ id: string }>("/api/runs", {
       promptVersionId: form.promptVersionId,
       datasetId: form.datasetId,
       provider: form.provider,
@@ -48,7 +61,7 @@ export function RunBuilderForm({ prompts, datasets }: RunBuilderProps) {
     setLoading(false);
     if (result.ok) {
       success("Evaluation run queued");
-      router.refresh();
+      router.push(`/runs/${result.data.id}`);
     } else {
       error(result.error);
     }
@@ -73,9 +86,10 @@ export function RunBuilderForm({ prompts, datasets }: RunBuilderProps) {
         </Select>
       </FieldWrapper>
       <FieldWrapper label="Provider">
-        <Select value={form.provider} onChange={(e) => update("provider", e.target.value)}>
+        <Select value={form.provider} onChange={(e) => updateProvider(e.target.value as RunProvider)}>
           <option value="groq">Groq</option>
           <option value="gemini">Gemini</option>
+          <option value="ollama">Ollama</option>
         </Select>
       </FieldWrapper>
       <FieldWrapper label="Model">
@@ -114,19 +128,20 @@ export function RunDetailActions({ runId, status }: { runId: string; status: str
 
   async function exportRun() {
     setLoading("export");
-    await api.download(`/api/runs/${runId}/export`, `${runId}.json`);
+    const result = await api.download(`/api/runs/${runId}/export`, `${runId}.json`);
     setLoading(null);
-    success("Run exported");
+    if (result.ok) success("Run exported");
+    else error(result.error);
   }
 
   return (
     <div className="flex gap-2">
-      {(status === "completed" || status === "failed") && (
+      {(status === "completed" || status === "failed" || status === "partially_failed" || status === "needs_review") && (
         <Button variant="secondary" onClick={retryFailed} loading={loading === "retry"}>
           <RotateCcw size={16} /> Retry Failed
         </Button>
       )}
-      {(status === "queued" || status === "running") && (
+      {(status === "queued" || status === "initializing" || status === "running" || status === "retrying") && (
         <Button variant="secondary" onClick={cancel} loading={loading === "cancel"}>
           <Square size={16} /> Cancel
         </Button>

@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/prisma";
 import type { RequestContext } from "@/server/context";
+import { EventService } from "@/server/services/event-service";
 
 export class WorkspaceService {
+  private readonly events = new EventService();
+
   current(context: RequestContext) {
     return prisma.workspace.findFirst({
       where: {
@@ -19,14 +22,14 @@ export class WorkspaceService {
     });
   }
 
-  createForUser(context: RequestContext, input: { name: string; role?: string; inviteEmail?: string }) {
+  async createForUser(context: RequestContext, input: { name: string; role?: string; inviteEmail?: string }) {
     const slug = input.name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "")
       .slice(0, 48);
 
-    return prisma.$transaction(async (tx) => {
+    const workspace = await prisma.$transaction(async (tx) => {
       const workspace = await tx.workspace.create({
         data: {
           name: input.name,
@@ -59,8 +62,41 @@ export class WorkspaceService {
         }
       });
 
+      if (input.inviteEmail) {
+        const invitedUser = await tx.user.upsert({
+          where: { email: input.inviteEmail },
+          update: {},
+          create: {
+            authUserId: `invite:${input.inviteEmail}`,
+            email: input.inviteEmail
+          }
+        });
+
+        await tx.workspaceMember.upsert({
+          where: { workspaceId_userId: { workspaceId: workspace.id, userId: invitedUser.id } },
+          update: { role: "reviewer", invitedBy: context.userId },
+          create: {
+            workspaceId: workspace.id,
+            userId: invitedUser.id,
+            role: "reviewer",
+            invitedBy: context.userId
+          }
+        });
+      }
+
       return workspace;
     });
+
+    await this.events.emitRaw({
+      workspaceId: workspace.id,
+      actorUserId: context.userId,
+      entityType: "workspace",
+      entityId: workspace.id,
+      action: "workspace_created",
+      payload: { name: workspace.name, plan: workspace.plan }
+    });
+
+    return workspace;
   }
 
   async inviteMember(context: RequestContext, input: { email: string; role: "admin" | "editor" | "reviewer" | "viewer" }) {
@@ -73,7 +109,7 @@ export class WorkspaceService {
       }
     });
 
-    return prisma.workspaceMember.upsert({
+    const member = await prisma.workspaceMember.upsert({
       where: { workspaceId_userId: { workspaceId: context.workspaceId, userId: user.id } },
       update: { role: input.role, invitedBy: context.userId },
       create: {
@@ -83,18 +119,45 @@ export class WorkspaceService {
         invitedBy: context.userId
       }
     });
+
+    await this.events.emit(context, {
+      entityType: "workspace_member",
+      entityId: member.id,
+      action: "permission_change",
+      payload: { email: input.email, role: input.role, operation: "invite_or_update" }
+    });
+
+    return member;
   }
 
-  updateMemberRole(context: RequestContext, memberId: string, role: "admin" | "editor" | "reviewer" | "viewer") {
-    return prisma.workspaceMember.update({
+  async updateMemberRole(context: RequestContext, memberId: string, role: "admin" | "editor" | "reviewer" | "viewer") {
+    const member = await prisma.workspaceMember.update({
       where: { id: memberId, workspaceId: context.workspaceId },
       data: { role }
     });
+
+    await this.events.emit(context, {
+      entityType: "workspace_member",
+      entityId: member.id,
+      action: "permission_change",
+      payload: { role, operation: "role_update" }
+    });
+
+    return member;
   }
 
-  removeMember(context: RequestContext, memberId: string) {
-    return prisma.workspaceMember.delete({
+  async removeMember(context: RequestContext, memberId: string) {
+    const member = await prisma.workspaceMember.delete({
       where: { id: memberId, workspaceId: context.workspaceId }
     });
+
+    await this.events.emit(context, {
+      entityType: "workspace_member",
+      entityId: member.id,
+      action: "permission_change",
+      payload: { operation: "remove" }
+    });
+
+    return member;
   }
 }

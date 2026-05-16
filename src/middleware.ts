@@ -49,10 +49,12 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!user && !isPublic) {
-    const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/sign-in";
+    const redirectUrl = new URL("/sign-in", process.env.NEXT_PUBLIC_APP_URL ?? request.url);
     redirectUrl.searchParams.set("next", path);
-    return NextResponse.redirect(redirectUrl);
+    return new Response(null, {
+      status: 307,
+      headers: { Location: redirectUrl.toString() }
+    });
   }
 
   return response;

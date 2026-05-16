@@ -19,6 +19,7 @@ enum WorkspaceRole {
 enum ProviderName {
   gemini
   groq
+  ollama
 }
 
 enum EntityStatus {
@@ -30,7 +31,11 @@ enum EntityStatus {
 
 enum RunStatus {
   queued
+  initializing
   running
+  retrying
+  partially_failed
+  needs_review
   completed
   failed
   cancelled
@@ -39,8 +44,10 @@ enum RunStatus {
 enum RunItemStatus {
   queued
   running
+  retrying
   passed
   warning
+  needs_review
   failed
   cancelled
 }
@@ -62,6 +69,7 @@ model User {
   reviews       HumanReview[]
   usageEvents   UsageEvent[]
   auditLogs     AuditLog[]
+  systemEvents  SystemEvent[]
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
 
@@ -81,6 +89,7 @@ model Workspace {
   datasets  Dataset[]
   runs      Run[]
   credentials ProviderCredential[]
+  events    SystemEvent[]
   createdAt DateTime          @default(now()) @map("created_at")
   updatedAt DateTime          @updatedAt @map("updated_at")
 
@@ -140,6 +149,7 @@ model PromptVersion {
   modelParamsJson    Json            @default("{}") @map("model_params_json")
   status             EntityStatus    @default(draft)
   changelog          String?
+  tags               String[]        @default([])
   createdBy          String          @map("created_by") @db.Uuid
   workspace          Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project            Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -219,8 +229,8 @@ model Run {
   createdBy       String         @map("created_by") @db.Uuid
   workspace       Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   project         Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  promptVersion   PromptVersion  @relation(fields: [promptVersionId], references: [id])
-  dataset         Dataset        @relation(fields: [datasetId], references: [id])
+  promptVersion   PromptVersion  @relation(fields: [promptVersionId], references: [id], onDelete: Restrict)
+  dataset         Dataset        @relation(fields: [datasetId], references: [id], onDelete: Cascade)
   items           RunItem[]
   humanReviews    HumanReview[]
   usageEvents     UsageEvent[]
@@ -249,7 +259,7 @@ model RunItem {
   startedAt           DateTime?    @map("started_at")
   completedAt         DateTime?    @map("completed_at")
   run                 Run          @relation(fields: [runId], references: [id], onDelete: Cascade)
-  datasetCase         DatasetCase  @relation(fields: [datasetCaseId], references: [id])
+  datasetCase         DatasetCase  @relation(fields: [datasetCaseId], references: [id], onDelete: Cascade)
   trace               Trace?
   reviews             HumanReview[]
   feedback            PromptFeedback[]
@@ -274,6 +284,26 @@ model RunStatusEvent {
 
   @@index([workspaceId, runId, createdAt])
   @@map("run_status_events")
+}
+
+model SystemEvent {
+  id           String    @id @default(uuid()) @db.Uuid
+  sequence     Int       @default(autoincrement())
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  actorUserId  String?   @map("actor_user_id") @db.Uuid
+  entityType   String    @map("entity_type")
+  entityId     String    @map("entity_id")
+  action       String
+  payloadJson  Json      @default("{}") @map("payload_json")
+  metadataJson Json      @default("{}") @map("metadata_json")
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  actor        User?     @relation(fields: [actorUserId], references: [id])
+  createdAt    DateTime  @default(now()) @map("created_at")
+
+  @@index([workspaceId, entityType, entityId, createdAt])
+  @@index([workspaceId, action, createdAt])
+  @@index([workspaceId, sequence])
+  @@map("system_events")
 }
 
 model Trace {
@@ -524,13 +554,22 @@ model BackgroundJob {
   jobType      String    @map("job_type")
   payloadJson  Json      @map("payload_json")
   status       RunStatus @default(queued)
+  priority     Int       @default(0)
   attempts     Int       @default(0)
+  maxAttempts  Int       @default(3) @map("max_attempts")
   runAfter     DateTime  @default(now()) @map("run_after")
   lockedAt     DateTime? @map("locked_at")
+  lockedBy     String?   @map("locked_by")
+  lastHeartbeatAt DateTime? @map("last_heartbeat_at")
+  completedAt  DateTime? @map("completed_at")
+  idempotencyKey String? @map("idempotency_key")
+  metadataJson Json      @default("{}") @map("metadata_json")
   errorMessage String?   @map("error_message")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
 
   @@index([workspaceId, status, runAfter])
+  @@index([status, runAfter, priority])
+  @@unique([idempotencyKey])
   @@map("background_jobs")
 }

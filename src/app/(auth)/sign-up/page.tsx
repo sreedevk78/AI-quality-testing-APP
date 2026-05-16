@@ -1,4 +1,5 @@
 import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
 import { PageTitle } from "@/components/page-title";
 import { signInWithOAuth, signUp } from "@/app/(auth)/auth-actions";
 
@@ -26,26 +27,34 @@ export default async function SignUpPage({
         <form action={signUp} className="space-y-4">
           <label className="block text-sm font-medium">
             Email
-            <input name="email" className="focus-ring mt-2 w-full rounded-md border border-border bg-card px-3 py-2" type="email" required />
+            <input name="email" className="focus-ring mt-2 w-full rounded-md border border-border bg-card px-3 py-2" type="email" autoComplete="email" required />
           </label>
           <label className="block text-sm font-medium">
             Password
-            <input name="password" className="focus-ring mt-2 w-full rounded-md border border-border bg-card px-3 py-2" type="password" required />
+            <input name="password" className="focus-ring mt-2 w-full rounded-md border border-border bg-card px-3 py-2" type="password" autoComplete="new-password" minLength={8} required />
           </label>
-          <button className="focus-ring w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
+          <button type="submit" className="focus-ring w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground">
             Get Started
           </button>
         </form>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <form action={signInWithOAuth}>
+            <input type="hidden" name="next" value="/onboarding" />
             <input type="hidden" name="provider" value="google" />
-            <button className="focus-ring w-full rounded-md border border-border px-3 py-2 text-sm">Google</button>
+            <button type="submit" className="focus-ring w-full rounded-md border border-border px-3 py-2 text-sm">Google</button>
           </form>
           <form action={signInWithOAuth}>
+            <input type="hidden" name="next" value="/onboarding" />
             <input type="hidden" name="provider" value="github" />
-            <button className="focus-ring w-full rounded-md border border-border px-3 py-2 text-sm">GitHub</button>
+            <button type="submit" className="focus-ring w-full rounded-md border border-border px-3 py-2 text-sm">GitHub</button>
           </form>
         </div>
+        <p className="mt-5 text-center text-sm text-muted-foreground">
+          Already have an account?{" "}
+          <Link className="font-medium text-primary hover:underline" href="/sign-in">
+            Sign in
+          </Link>
+        </p>
       </section>
     </main>
   );

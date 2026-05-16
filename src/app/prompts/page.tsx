@@ -21,7 +21,7 @@ export default async function PromptsPage() {
         description="Immutable prompt versions, model defaults, changelogs, tags, publishing state, and version comparison."
         action={<NewVersionButton projectId={projectId} />}
       />
-      <PromptsPageClient initialPrompts={promptVersions} />
+      <PromptsPageClient initialPrompts={promptVersions} projectId={projectId} />
     </AppShell>
   );
 }

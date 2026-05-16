@@ -9,7 +9,7 @@ const audit = new AuditService();
 
 const reviewSchema = z.object({
   runItemId: z.string().uuid(),
-  verdict: z.string().min(2),
+  verdict: z.enum(["approved", "needs_fix", "rejected"]),
   score: z.number().min(0).max(1).optional(),
   notes: z.string().optional()
 });

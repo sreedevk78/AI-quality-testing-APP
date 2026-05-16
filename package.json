@@ -17,7 +17,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:seed": "node prisma/seed.mjs",
     "prisma:studio": "prisma studio",
-    "worker:evaluate": "node scripts/evaluate-worker.mjs"
+    "worker:evaluate": "tsx src/server/workers/evaluate-worker.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

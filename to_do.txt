@@ -1,0 +1,528 @@
+You are working inside an **existing codebase** for an AI QA / Evaluation Lab.
+
+There is a file in the project root named **`to_do`**. Treat that file as a permanent project memory. Re-open and reread it:
+
+* before making any major change
+* whenever context feels thin
+* after finishing each major implementation block
+* whenever you are unsure what to preserve
+* whenever you are about to refactor or rename anything
+
+Also, before making changes, **fully read the codebase again** so you do not lose context. Do not rely on memory alone. If your context gets messy, stop and re-read the relevant files and the `to_do` file before continuing.
+
+## Critical rules
+
+1. **Do not delete existing features.**
+2. **Do not break existing routes, pages, hooks, services, schemas, or UI flows.**
+3. **Do not rewrite the app from scratch.**
+4. **Do not “simplify” by removing capabilities.**
+5. **Preserve backward compatibility whenever possible.**
+6. **Work incrementally.**
+7. **Treat every current feature as intentional unless it is clearly broken.**
+8. **If a refactor is needed, keep old behavior working through compatibility layers or safe migration.**
+9. **Do not guess architectural decisions when the repo already defines them.**
+10. **If you feel uncertain, re-read the codebase and the `to_do` file instead of improvising.**
+
+Your task is to make this app **fully production-ready** by implementing the missing engineering pieces without damaging what already exists.
+
+---
+
+# What this app is
+
+This is an **AI QA / Evaluation Lab**. It is meant to:
+
+* store and version prompts
+* create datasets and test cases
+* run prompts across one or more AI providers
+* compare outputs across models
+* grade outputs automatically and manually
+* inspect execution traces
+* detect regressions
+* review and approve results
+* manage workspaces and permissions securely
+
+This is not a student demo. It should behave like a serious engineering product.
+
+---
+
+# Missing things that must be implemented or completed
+
+## 1) True execution engine / run orchestration
+
+The app needs a real workflow engine, not just a linear request-response flow.
+
+Implement:
+
+* queued
+* initializing
+* running
+* retrying
+* partially_failed
+* needs_review
+* completed
+* failed
+* cancelled
+
+Requirements:
+
+* runs must persist state between steps
+* runs must resume safely after interruption
+* each job item must be protected from double execution
+* support retries for transient failures
+* support terminal failures
+* support cancellation
+* support checkpointing
+* support batch execution across dataset cases
+* support parallel or controlled sequential execution when appropriate
+* support run history and step history
+
+The execution layer must feel durable and operationally safe.
+
+---
+
+## 2) Queue and background job infrastructure
+
+Long-running evaluation jobs must not block the UI.
+
+Implement:
+
+* a persistent background job system
+* job leasing or locking
+* retry policy
+* dead-letter / failed-job state
+* concurrency control
+* restart recovery
+* idempotency protections
+* safe reprocessing
+* job status visibility in the UI
+
+This should work as a real platform subsystem.
+
+---
+
+## 3) Event-driven architecture
+
+The app needs append-only event thinking so everything is traceable.
+
+Implement events such as:
+
+* run_created
+* run_started
+* model_call_started
+* model_call_completed
+* grading_started
+* grading_completed
+* review_requested
+* review_approved
+* review_rejected
+* regression_detected
+* run_failed
+* run_cancelled
+* export_created
+* auth_action
+* permission_change
+
+Requirements:
+
+* each important action should emit an event
+* events must have timestamps
+* events must reference actor, workspace, and entity
+* events must be searchable
+* events should support analytics and auditing
+* event order must be preserved where it matters
+
+---
+
+## 4) Deep trace system
+
+The trace layer must be more than logs.
+
+Implement:
+
+* trace root per run
+* nested spans
+* parent-child relationships
+* model call spans
+* retrieval spans
+* tool call spans
+* grading spans
+* review spans
+* error spans
+* timing information
+* metadata
+* raw provider response capture where appropriate
+* links to run item, prompt version, dataset case, and grader result
+
+The trace viewer must be able to show:
+
+* the full execution tree
+* per-span timing
+* failure points
+* retries
+* raw output
+* grading decisions
+* review decisions
+* final outcome
+
+---
+
+## 5) Provider abstraction layer
+
+Support multiple AI providers through one unified interface.
+
+Implement a clean provider layer for:
+
+* Gemini
+* Groq
+* Ollama
+
+Structure it so future providers can be added easily.
+
+Requirements:
+
+* one normalized response format
+* one normalized error format
+* one normalized token/cost/latency model
+* provider-specific SDK logic hidden behind adapters
+* server-side only calls
+* no API keys exposed to the client
+* no hardcoded provider logic scattered across the app
+* model selection should be data-driven, not hardcoded everywhere
+
+The same evaluation run should be able to compare different providers and models consistently.
+
+---
+
+## 6) Robust evaluation / grading engine
+
+This app exists to grade AI behavior. That logic must be serious.
+
+Implement multiple grader types:
+
+* deterministic validators
+* JSON / schema validation
+* formatting checks
+* reference / expected-output comparison
+* embedding similarity grading
+* rubric-based scoring
+* LLM-as-a-judge grading
+* manual human review grading
+
+Requirements:
+
+* weighted score aggregation
+* pass/fail thresholds
+* per-metric scores
+* explanation text
+* failure categorization
+* versioned grader definitions
+* grader configuration per dataset or per run
+* clear separation between raw scores and final decision
+
+Failure categories should include:
+
+* hallucination
+* format error
+* incomplete answer
+* instruction miss
+* unsafe output
+* retrieval failure
+* tool misuse
+* schema mismatch
+* timeout
+* provider failure
+* grading failure
+
+---
+
+## 7) Dataset management system
+
+The dataset system must feel like a real testing product.
+
+Implement:
+
+* dataset CRUD
+* dataset versioning
+* dataset cases
+* tags and categories
+* difficulty level
+* expected result fields
+* optional reference output
+* optional rubric notes
+* import/export support
+* search and filtering
+* workspace scoping
+* ownership and permissions
+
+Datasets should be usable for:
+
+* prompt regression testing
+* model comparison
+* workflow comparison
+* grading audits
+* release gates
+
+---
+
+## 8) Prompt registry and versioning
+
+Prompts should behave like versioned assets.
+
+Implement:
+
+* create prompt
+* update prompt as new version
+* preserve full history
+* compare versions
+* diff viewer
+* rollback to prior version
+* metadata
+* labels / environment tags
+* links to runs, traces, datasets, and reports
+
+Do not overwrite prompt history silently.
+
+---
+
+## 9) Human review workflow
+
+The app needs a real review queue.
+
+Implement:
+
+* review-required state
+* reviewer assignment or reviewer access
+* approve / reject / annotate / override
+* review comments persisted
+* review decisions visible in trace history
+* threshold-based routing into review
+* review status in dashboards
+* review audit trail
+
+---
+
+## 10) RBAC and authorization
+
+This must be secure enough for a real multi-tenant SaaS product.
+
+Implement roles such as:
+
+* owner
+* admin
+* editor
+* reviewer
+* viewer
+
+Requirements:
+
+* strict workspace isolation
+* server-side authorization checks
+* Supabase RLS enforcement
+* role-based UI gating
+* safe access checks for prompts, datasets, traces, runs, reviews, exports, and provider settings
+* no public table access where it should not exist
+* no implicit trust in client-side permissions
+
+---
+
+## 11) Security hardening
+
+This app may store sensitive AI workflow assets.
+
+Implement:
+
+* secure provider API key handling
+* encrypted or otherwise protected secrets storage
+* no provider keys in the client
+* safe upload handling
+* safe import/export handling
+* secure audit visibility
+* least-privilege patterns
+* defensive validation on all inputs
+* secure defaults
+
+---
+
+## 12) Cost governance and usage limits
+
+AI cost control is required.
+
+Implement:
+
+* token usage tracking
+* estimated cost tracking
+* per-workspace usage limits
+* per-user or per-workspace quotas
+* warnings for high usage
+* run budget checks
+* provider-level cost comparison
+* runaway protection
+
+The app should warn or block expensive actions according to configured limits.
+
+---
+
+## 13) Observability and analytics
+
+Add serious analytics for both product and execution health.
+
+Implement:
+
+* run duration
+* per-case duration
+* provider latency
+* pass rate
+* fail rate
+* retry counts
+* grader scores
+* cost summaries
+* regression summaries
+* model comparison summaries
+* workspace analytics
+* prompt version analytics
+* dataset analytics
+
+The UI should make it easy to understand:
+
+* what is working
+* what is failing
+* what regressed
+* which model is best for which dataset
+* where the cost is going
+
+---
+
+## 14) Live updates / realtime behavior
+
+The app should feel alive during runs.
+
+Implement:
+
+* live run updates
+* live trace updates
+* live status changes
+* live grading updates where possible
+* live review queue updates
+* realtime-friendly UI states
+
+---
+
+## 15) Strong API contracts and validation
+
+The backend must be predictable.
+
+Implement:
+
+* strict request validation
+* strict response contracts
+* typed service interfaces
+* explicit DTOs or schemas
+* stable event payloads
+* safe error responses
+* no vague any-shaped data flow
+
+Every public operation should validate input before acting.
+
+---
+
+## 16) Testing depth
+
+Because this is an AI testing platform, the platform itself must be tested deeply.
+
+Implement:
+
+* unit tests for core logic
+* integration tests for provider adapters
+* integration tests for grading flows
+* integration tests for run orchestration
+* tests for retry behavior
+* tests for schema validation
+* tests for RLS-sensitive flows
+* tests for permission checks
+* tests for trace creation
+* tests for comparison logic
+
+Do not ship major infrastructure logic without coverage.
+
+---
+
+## 17) Deployment and production readiness
+
+Make the app deployable like a real service.
+
+Implement or verify:
+
+* environment variable handling
+* separate dev/staging/prod thinking
+* migration safety
+* worker deployment strategy
+* build stability
+* failure-safe startup behavior
+* logging for production debugging
+* clear setup instructions
+
+---
+
+# Engineering expectations
+
+The code should be:
+
+* modular
+* maintainable
+* type-safe
+* readable
+* secure
+* resilient
+* production-minded
+* consistent with the existing repo style
+
+Prefer:
+
+* small focused functions
+* shared services for repeated logic
+* clear naming
+* explicit state transitions
+* compatibility over rewrite
+* incremental change over destructive refactor
+
+---
+
+# Important operating behavior for you
+
+Before making changes:
+
+1. Re-read the codebase.
+2. Re-read the `to_do` file.
+3. List what already exists.
+4. List what is missing.
+5. Decide the safest next step.
+6. Implement only the minimum needed for that step.
+7. Re-check the `to_do` file again before moving to the next major block.
+
+If you start losing context, stop and reread the repository and `to_do` rather than guessing.
+
+---
+
+# Non-negotiable constraints
+
+* Do not remove existing features.
+* Do not break current behavior.
+* Do not replace working systems with incomplete rewrites.
+* Do not lose routes, components, services, or schema assumptions.
+* Do not change the app into a different product.
+* Do not introduce a second competing architecture.
+* Do not silently simplify away important functionality.
+
+---
+
+# Goal state
+
+When finished, this app should feel like:
+
+* a real AI infrastructure product
+* a serious evaluation platform
+* a multi-tenant SaaS system
+* a traceable, auditable, secure engineering tool
+* something recruiters would recognize as production-minded engineering
+
+Now inspect the codebase again, re-read the `to_do` file, identify the missing pieces, and implement them carefully without deleting anything that already works.

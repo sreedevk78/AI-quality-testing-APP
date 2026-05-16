@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Play, Save, Code, Variable } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FieldWrapper, Input, Select, Textarea } from "@/components/ui/form-field";
@@ -8,7 +9,15 @@ import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import type { PromptVersion } from "@/lib/types";
 
-export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion }) {
+type PromptEditorProvider = "groq" | "gemini" | "ollama";
+const defaultModels: Record<PromptEditorProvider, string> = {
+  groq: "llama-3.3-70b-versatile",
+  gemini: "gemini-2.5-flash",
+  ollama: "llama3.1"
+};
+
+export function PromptEditor({ initialPrompt, projectId }: { initialPrompt?: PromptVersion; projectId: string }) {
+  const router = useRouter();
   const { success, error } = useToast();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -17,9 +26,10 @@ export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion 
     title: initialPrompt?.title ?? "",
     systemPrompt: initialPrompt?.systemPrompt ?? "You are a precise AI assistant.",
     userPromptTemplate: initialPrompt?.userPromptTemplate ?? "Hello, {{name}}!",
-    provider: (initialPrompt?.provider as "groq" | "gemini") ?? "groq",
+    provider: (initialPrompt?.provider as PromptEditorProvider | undefined) ?? "groq",
     modelName: initialPrompt?.model ?? "llama-3.3-70b-versatile",
     temperature: initialPrompt?.temperature ?? 0.2,
+    tags: initialPrompt?.tags.join(", ") ?? "",
   });
 
   const [testVariables, setTestVariables] = useState<Record<string, string>>({
@@ -33,19 +43,27 @@ export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion 
         title: initialPrompt.title,
         systemPrompt: initialPrompt.systemPrompt,
         userPromptTemplate: initialPrompt.userPromptTemplate,
-        provider: initialPrompt.provider as any,
+        provider: initialPrompt.provider as PromptEditorProvider,
         modelName: initialPrompt.model,
         temperature: initialPrompt.temperature,
+        tags: initialPrompt.tags.join(", "),
       });
     }
   }, [initialPrompt]);
 
-  const update = (key: string, value: any) => setForm(prev => ({ ...prev, [key]: value }));
+  const update = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm(prev => ({ ...prev, [key]: value }));
+  const updateProvider = (provider: PromptEditorProvider) => {
+    setForm((current) => ({
+      ...current,
+      provider,
+      modelName: defaultModels[provider]
+    }));
+  };
 
   const renderedPreview = () => {
     let template = form.userPromptTemplate;
     Object.entries(testVariables).forEach(([key, val]) => {
-      template = template.replace(new RegExp(`{{${key}}}`, 'g'), val);
+      template = template.replace(new RegExp(`{{\\s*${escapeRegExp(key)}\\s*}}`, "g"), val);
     });
     return template;
   };
@@ -54,7 +72,7 @@ export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion 
     setTesting(true);
     setTestResult(null);
     const fullPrompt = `${form.systemPrompt}\n\n${renderedPreview()}`;
-    const result = await api.post<any>("/api/providers/test", {
+    const result = await api.post<{ text: string }>("/api/providers/test", {
       provider: form.provider,
       model: form.modelName,
       prompt: fullPrompt,
@@ -70,14 +88,21 @@ export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion 
   async function handleSave() {
     setLoading(true);
     const result = await api.post("/api/prompts", {
-      ...form,
+      title: form.title,
+      systemPrompt: form.systemPrompt,
+      userPromptTemplate: form.userPromptTemplate,
+      provider: form.provider,
+      modelName: form.modelName,
       promptKey: initialPrompt?.key ?? "manual_prompt",
-      projectId: initialPrompt?.projectId ?? "demo",
+      projectId: initialPrompt?.projectId ?? projectId,
+      modelParams: { temperature: form.temperature, topP: 1 },
       variablesSchema: {}, // Optional for now
+      tags: form.tags.split(",").map((tag) => tag.trim()).filter(Boolean),
     });
     setLoading(false);
     if (result.ok) {
       success("New version saved");
+      router.refresh();
     } else {
       error(result.error);
     }
@@ -89,9 +114,10 @@ export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion 
       <div className="space-y-4 rounded-lg border border-border bg-muted/25 p-4">
         <h3 className="text-xs font-bold uppercase text-muted-foreground">Parameters</h3>
         <FieldWrapper label="Provider">
-          <Select value={form.provider} onChange={(e) => update("provider", e.target.value)}>
+          <Select value={form.provider} onChange={(e) => updateProvider(e.target.value as PromptEditorProvider)}>
             <option value="groq">Groq</option>
             <option value="gemini">Gemini</option>
+            <option value="ollama">Ollama</option>
           </Select>
         </FieldWrapper>
         <FieldWrapper label="Model">
@@ -99,6 +125,9 @@ export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion 
         </FieldWrapper>
         <FieldWrapper label="Temperature">
           <Input type="number" step="0.1" value={form.temperature} onChange={(e) => update("temperature", parseFloat(e.target.value))} />
+        </FieldWrapper>
+        <FieldWrapper label="Tags">
+          <Input value={form.tags} onChange={(e) => update("tags", e.target.value)} placeholder="routing, production" />
         </FieldWrapper>
         
         <div className="pt-4 border-t border-border">
@@ -169,4 +198,8 @@ export function PromptEditor({ initialPrompt }: { initialPrompt?: PromptVersion 
       </div>
     </div>
   );
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

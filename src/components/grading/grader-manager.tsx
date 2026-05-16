@@ -1,15 +1,29 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Trash2, ShieldCheck, Sparkles } from "lucide-react";
+import { Plus, Trash2, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Modal, ModalActions } from "@/components/ui/modal";
 import { FieldWrapper, Input, Select, Textarea } from "@/components/ui/form-field";
 import { api } from "@/lib/api-client";
 import { useToast } from "@/components/ui/toast";
 import { useRouter } from "next/navigation";
+import type { ProviderName } from "@/lib/types";
 
-export function GraderManager({ initialDefinitions }: { initialDefinitions: any[] }) {
+type GraderDefinitionView = {
+  id: string;
+  name: string;
+  provider: ProviderName;
+  modelName: string;
+};
+
+const defaultModels: Record<ProviderName, string> = {
+  groq: "llama-3.3-70b-versatile",
+  gemini: "gemini-2.5-flash",
+  ollama: "llama3.1"
+};
+
+export function GraderManager({ initialDefinitions }: { initialDefinitions: GraderDefinitionView[] }) {
   const router = useRouter();
   const { success, error } = useToast();
   const [open, setOpen] = useState(false);
@@ -17,8 +31,8 @@ export function GraderManager({ initialDefinitions }: { initialDefinitions: any[
   const [form, setForm] = useState({
     name: "",
     description: "",
-    provider: "groq",
-    modelName: "llama-3.3-70b-versatile",
+    provider: "groq" as ProviderName,
+    modelName: defaultModels.groq,
     promptTemplate: "Evaluate the following output against the rubric.\n\nOutput: {{output}}\n\nRubric: {{rubric}}\n\nReturn JSON with score (0.0 to 1.0), label, and rationale."
   });
 
@@ -67,7 +81,7 @@ export function GraderManager({ initialDefinitions }: { initialDefinitions: any[
               <p className="font-medium">{g.name}</p>
               <p className="text-xs text-muted-foreground">{g.provider} / {g.modelName}</p>
             </div>
-            <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 h-8 w-8 p-0 text-danger" onClick={() => handleDelete(g.id)}>
+            <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 h-8 w-8 p-0 text-danger" onClick={() => handleDelete(g.id)} aria-label={`Delete ${g.name}`}>
               <Trash2 size={14} />
             </Button>
           </div>
@@ -84,9 +98,16 @@ export function GraderManager({ initialDefinitions }: { initialDefinitions: any[
           </FieldWrapper>
           <div className="grid gap-4 md:grid-cols-2">
              <FieldWrapper label="Provider">
-              <Select value={form.provider} onChange={(e) => setForm({ ...form, provider: e.target.value })}>
+              <Select
+                value={form.provider}
+                onChange={(e) => {
+                  const provider = e.target.value as ProviderName;
+                  setForm({ ...form, provider, modelName: defaultModels[provider] });
+                }}
+              >
                 <option value="groq">Groq</option>
                 <option value="gemini">Gemini</option>
+                <option value="ollama">Ollama</option>
               </Select>
             </FieldWrapper>
             <FieldWrapper label="Model">

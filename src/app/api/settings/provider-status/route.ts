@@ -1,13 +1,21 @@
 import { apiError, apiOk } from "@/server/api";
 import { getRequestContext } from "@/server/context";
+import { ProviderCredentialService } from "@/server/services/provider-credential-service";
+
+const credentials = new ProviderCredentialService();
 
 export async function GET(request: Request) {
   try {
-    await getRequestContext(request);
+    const context = await getRequestContext(request);
+    const workspaceCredentials = await credentials.list(context);
+    const activeProviders = new Set(
+      workspaceCredentials.filter((credential) => credential.status === "active").map((credential) => credential.provider)
+    );
 
     return apiOk({
-      groq: { configured: Boolean(process.env.GROQ_API_KEY), source: "server-env" },
-      gemini: { configured: Boolean(process.env.GEMINI_API_KEY), source: "server-env" },
+      groq: { configured: activeProviders.has("groq") || Boolean(process.env.GROQ_API_KEY), source: activeProviders.has("groq") ? "workspace-secret" : "server-env" },
+      gemini: { configured: activeProviders.has("gemini") || Boolean(process.env.GEMINI_API_KEY), source: activeProviders.has("gemini") ? "workspace-secret" : "server-env" },
+      ollama: { configured: activeProviders.has("ollama") || Boolean(process.env.OLLAMA_BASE_URL), source: activeProviders.has("ollama") ? "workspace-secret" : "server-env" },
       supabase: {
         urlConfigured: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
         publishableKeyConfigured: Boolean(

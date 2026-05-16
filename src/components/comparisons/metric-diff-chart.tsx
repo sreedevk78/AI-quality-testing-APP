@@ -1,12 +1,6 @@
 "use client";
 
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from "recharts";
-
-type MetricData = {
-  name: string;
-  baseline: number;
-  candidate: number;
-};
+import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis, Cell } from "recharts";
 
 export function MetricDiffChart({ title, baseline, candidate, unit = "%" }: { title: string, baseline: number, candidate: number, unit?: string }) {
   const data = [

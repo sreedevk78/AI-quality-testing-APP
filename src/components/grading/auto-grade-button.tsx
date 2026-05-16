@@ -17,7 +17,10 @@ export function AutoGradeButton({ runId }: { runId?: string }) {
     setLoading(true);
     const result = await api.post("/api/grading/auto-grade", { runId });
     setLoading(false);
-    if (result.ok) { success("Auto-grading complete"); router.refresh(); }
+    if (result.ok) { 
+      success("Background auto-grading started. Counts will update as workers finish."); 
+      router.refresh(); 
+    }
     else error(result.error);
   }
 

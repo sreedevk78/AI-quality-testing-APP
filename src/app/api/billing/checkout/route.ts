@@ -1,13 +1,13 @@
 import { apiError, apiOk } from "@/server/api";
-import { assertCanWrite, getRequestContext, RequestContextError } from "@/server/context";
+import { assertCanAdminWorkspace, getRequestContext, RequestContextError } from "@/server/context";
 
 export async function POST(request: Request) {
   try {
     const context = await getRequestContext(request);
-    assertCanWrite(context);
+    assertCanAdminWorkspace(context);
     const stripeKey = process.env.STRIPE_SECRET_KEY;
     const priceId = process.env.STRIPE_PRICE_ID;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(request.url).origin;
+    const appUrl = new URL(request.url).origin;
 
     if (!stripeKey || !priceId) {
       throw new RequestContextError("Stripe checkout is not configured. Set STRIPE_SECRET_KEY and STRIPE_PRICE_ID.", 503);

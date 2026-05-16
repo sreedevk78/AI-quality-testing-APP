@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Upload, DatabaseZap, Plus } from "lucide-react";
+import { Upload, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CreateDatasetModal, AddCaseModal, ImportCsvModal } from "@/components/datasets/dataset-actions";
 

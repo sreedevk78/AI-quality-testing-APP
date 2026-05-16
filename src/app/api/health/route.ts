@@ -7,7 +7,8 @@ export async function GET() {
     supabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
     supabaseKey: Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
     groq: Boolean(process.env.GROQ_API_KEY),
-    gemini: Boolean(process.env.GEMINI_API_KEY)
+    gemini: Boolean(process.env.GEMINI_API_KEY),
+    ollama: Boolean(process.env.OLLAMA_BASE_URL)
   };
 
   try {
@@ -17,7 +18,7 @@ export async function GET() {
     checks.database = false;
   }
 
-  const ok = Object.values(checks).every(Boolean);
+  const ok = checks.database && checks.supabaseUrl && checks.supabaseKey && (checks.groq || checks.gemini || checks.ollama);
 
   return apiOk(
     {

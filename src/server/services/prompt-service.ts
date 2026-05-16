@@ -57,6 +57,7 @@ export class PromptService {
         modelName: input.modelName,
         modelParamsJson: input.modelParams as Prisma.InputJsonValue,
         status: "draft",
+        tags: input.tags,
         createdBy: context.userId
       }
     });
@@ -87,6 +88,41 @@ export class PromptService {
     return prisma.promptVersion.update({
       where: { id: promptVersionId, workspaceId: context.workspaceId },
       data: { status: "archived" }
+    });
+  }
+
+  async rollback(context: RequestContext, promptVersionId: string) {
+    const source = await prisma.promptVersion.findFirstOrThrow({
+      where: { id: promptVersionId, workspaceId: context.workspaceId }
+    });
+
+    const latest = await prisma.promptVersion.findFirst({
+      where: {
+        workspaceId: context.workspaceId,
+        projectId: source.projectId,
+        promptKey: source.promptKey
+      },
+      orderBy: { versionNumber: "desc" }
+    });
+
+    return prisma.promptVersion.create({
+      data: {
+        workspaceId: source.workspaceId,
+        projectId: source.projectId,
+        promptKey: source.promptKey,
+        versionNumber: (latest?.versionNumber ?? source.versionNumber) + 1,
+        title: `${source.title} rollback`,
+        systemPrompt: source.systemPrompt,
+        userPromptTemplate: source.userPromptTemplate,
+        variablesSchema: source.variablesSchema as Prisma.InputJsonValue,
+        provider: source.provider,
+        modelName: source.modelName,
+        modelParamsJson: source.modelParamsJson as Prisma.InputJsonValue,
+        status: "draft",
+        tags: source.tags,
+        changelog: `Rollback copy from v${source.versionNumber}`,
+        createdBy: context.userId
+      }
     });
   }
 

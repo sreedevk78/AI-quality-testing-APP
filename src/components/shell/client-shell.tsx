@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { Menu, X, Search } from "lucide-react";
 import Link from "next/link";
 import { api } from "@/lib/api-client";
@@ -46,15 +45,14 @@ export function MobileMenuButton() {
 }
 
 export function GlobalSearch() {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<{ prompts: any[]; datasets: any[]; runs: any[] }>({ prompts: [], datasets: [], runs: [] });
+  const [results, setResults] = useState<SearchResults>({ prompts: [], datasets: [], runs: [], events: [] });
 
   const search = useCallback(async (q: string) => {
     setQuery(q);
-    if (q.trim().length < 2) { setResults({ prompts: [], datasets: [], runs: [] }); return; }
-    const r = await api.get<any>(`/api/search?q=${encodeURIComponent(q)}`);
+    if (q.trim().length < 2) { setResults({ prompts: [], datasets: [], runs: [], events: [] }); return; }
+    const r = await api.get<SearchResults>(`/api/search?q=${encodeURIComponent(q)}`);
     if (r.ok) setResults(r.data);
   }, []);
 
@@ -70,16 +68,19 @@ export function GlobalSearch() {
             <input autoFocus className="focus-ring w-full rounded-md border border-border bg-background px-3 py-2 text-sm" placeholder="Search prompts, datasets, runs..." value={query} onChange={(e) => search(e.target.value)} />
             {query.length >= 2 && (
               <div className="mt-3 max-h-64 overflow-y-auto space-y-2">
-                {results.prompts?.map((p: any) => (
+                {results.prompts?.map((p) => (
                   <Link key={p.id} href="/prompts" onClick={() => setOpen(false)} className="block rounded-md px-3 py-2 text-sm hover:bg-muted">Prompt: {p.title ?? p.promptKey}</Link>
                 ))}
-                {results.datasets?.map((d: any) => (
+                {results.datasets?.map((d) => (
                   <Link key={d.id} href="/datasets" onClick={() => setOpen(false)} className="block rounded-md px-3 py-2 text-sm hover:bg-muted">Dataset: {d.name}</Link>
                 ))}
-                {results.runs?.map((r: any) => (
+                {results.runs?.map((r) => (
                   <Link key={r.id} href="/runs" onClick={() => setOpen(false)} className="block rounded-md px-3 py-2 text-sm hover:bg-muted">Run: {r.modelName}</Link>
                 ))}
-                {results.prompts?.length === 0 && results.datasets?.length === 0 && results.runs?.length === 0 && (
+                {results.events?.map((event) => (
+                  <Link key={event.id} href="/analytics/audit-logs" onClick={() => setOpen(false)} className="block rounded-md px-3 py-2 text-sm hover:bg-muted">Event: {event.action}</Link>
+                ))}
+                {results.prompts?.length === 0 && results.datasets?.length === 0 && results.runs?.length === 0 && results.events?.length === 0 && (
                   <p className="px-3 py-2 text-sm text-muted-foreground">No results found</p>
                 )}
               </div>
@@ -90,3 +91,10 @@ export function GlobalSearch() {
     </>
   );
 }
+
+type SearchResults = {
+  prompts: Array<{ id: string; title?: string | null; promptKey?: string | null }>;
+  datasets: Array<{ id: string; name: string }>;
+  runs: Array<{ id: string; modelName: string }>;
+  events?: Array<{ id: string; action: string }>;
+};
