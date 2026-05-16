@@ -8,9 +8,9 @@
 
 ![Dashboard Mockup](./public/docs/mockup.png)
 
-> A professional-grade observability and evaluation platform for AI engineering. Test, trace, and gate your LLM applications with confidence.
+## 📖 About
 
-AI QA Evaluation Lab is a comprehensive workspace designed to solve the "vibes-based" testing problem in AI development. It provides a structured environment to version prompts, manage test datasets, execute evaluation runs, and inspect detailed execution traces before shipping to production.
+AI QA Evaluation Lab is a professional-grade observability and evaluation platform designed for AI engineers and teams. It bridges the gap between prompt experimentation and production reliability. By treating prompts and model configurations as versioned assets, the platform allows you to run rigorous regression tests against curated datasets, visualize complex agentic traces, and enforce quality gates before any AI feature reaches your users.
 
 ---
 
