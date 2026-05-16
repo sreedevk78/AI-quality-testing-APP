@@ -21,7 +21,7 @@ export class RunExecutionService {
   private readonly prompts = new PromptService();
   private readonly credentials = new ProviderCredentialService();
 
-  async processJob(job: BackgroundJob, workerId: string) {
+  async processJob(job: BackgroundJob, workerId: string, heartbeat?: () => Promise<void>) {
     try {
       const payload = job.payloadJson as Record<string, unknown>;
       
@@ -30,7 +30,8 @@ export class RunExecutionService {
           if (!payload.runId) throw new Error("evaluate_run job is missing runId");
           const summary = await this.executeRun(payload.runId as string, { 
             workerId, 
-            retryOnlyFailed: Boolean(payload.retryOnlyFailed) 
+            retryOnlyFailed: Boolean(payload.retryOnlyFailed),
+            heartbeat
           });
           await this.jobs.complete(job, workerId, summary);
           break;
@@ -95,8 +96,8 @@ export class RunExecutionService {
     const grading = gradeDeterministically({
       outputText,
       outputJson: item.outputSnapshotJson,
-      expectedOutput: item.datasetCase.expectedOutputJson,
-      rubric: item.datasetCase.rubricJson
+      expectedOutput: (item as any).expectedOutputSnapshotJson,
+      rubric: (item as any).rubricSnapshotJson
     });
     const itemStatus: RunItemStatus = grading.label === "pass" ? "passed" : grading.label === "fail" ? "failed" : "needs_review";
 
@@ -122,8 +123,8 @@ export class RunExecutionService {
           name: "deterministic_aggregate",
           inputJson: {
             output: item.outputSnapshotJson,
-            expected: item.datasetCase.expectedOutputJson,
-            rubric: item.datasetCase.rubricJson
+            expected: (item as any).expectedOutputSnapshotJson,
+            rubric: (item as any).rubricSnapshotJson
           } as Prisma.InputJsonValue,
           outputJson: grading as unknown as Prisma.InputJsonValue,
           durationMs: Math.max(1, Date.now() - started),
@@ -174,7 +175,7 @@ export class RunExecutionService {
     });
   }
 
-  async executeRun(runId: string, options: { workerId: string; retryOnlyFailed?: boolean }) {
+  async executeRun(runId: string, options: { workerId: string; retryOnlyFailed?: boolean; heartbeat?: () => Promise<void> }) {
     const run = await prisma.run.findUniqueOrThrow({
       where: { id: runId },
       include: { promptVersion: true }
@@ -205,19 +206,35 @@ export class RunExecutionService {
     });
 
     let processed = 0;
-    for (const item of items) {
+    const { default: pLimit } = await import("p-limit");
+    const concurrency = Number(process.env.WORKER_CONCURRENCY ?? 10);
+    const limit = pLimit(concurrency);
+    const abortController = new AbortController();
+    let lastHeartbeat = Date.now();
+
+    const tasks = items.map((item) => limit(async () => {
+      if (abortController.signal.aborted) return;
+
       const stillActive = await this.leaseRunItem(item);
-      if (!stillActive) continue;
+      if (!stillActive) return;
 
       const currentRun = await prisma.run.findUnique({ where: { id: runId }, select: { status: true } });
       if (currentRun?.status === "cancelled") {
+        abortController.abort("Run was cancelled");
         await prisma.runItem.update({ where: { id: item.id }, data: { status: "cancelled", completedAt: new Date() } });
-        continue;
+        return;
       }
 
-      await this.executeRunItem(run, item);
+      await this.executeRunItem(run, item, abortController.signal);
       processed += 1;
-    }
+
+      if (options.heartbeat && Date.now() - lastHeartbeat > 30000) {
+        lastHeartbeat = Date.now();
+        await options.heartbeat().catch(() => {});
+      }
+    }));
+
+    await Promise.all(tasks);
 
     const summary = await this.finalizeRun(runId);
     return { runId, processed, ...summary };
@@ -239,7 +256,8 @@ export class RunExecutionService {
 
   private async executeRunItem(
     run: Run & { promptVersion: { systemPrompt: string; userPromptTemplate: string } },
-    item: RunItem & { datasetCase: { inputPayloadJson: unknown; expectedOutputJson: unknown; rubricJson: unknown } }
+    item: RunItem & { datasetCase: { inputPayloadJson: unknown; expectedOutputJson: unknown; rubricJson: unknown } },
+    abortSignal?: AbortSignal
   ) {
     const started = Date.now();
     const trace = await this.ensureTrace(run, item);
@@ -284,16 +302,18 @@ export class RunExecutionService {
         temperature: Number((run.modelParamsJson as { temperature?: number })?.temperature ?? 0.2),
         topP: Number((run.modelParamsJson as { topP?: number })?.topP ?? 1),
         apiKey: run.provider === "ollama" ? (credential && !credential.startsWith("http") ? credential : undefined) : (credential ?? undefined),
-        baseUrl: run.provider === "ollama" && credential?.startsWith("http") ? credential : undefined
+        baseUrl: run.provider === "ollama" && credential?.startsWith("http") ? credential : undefined,
+        abortSignal
       };
 
       const provider = getProvider(run.provider);
+      const { abortSignal: _, ...serializableModelRequest } = modelRequest;
       const response = await provider.generate(modelRequest);
       const grading = gradeDeterministically({
         outputText: response.text,
         outputJson: response.json,
-        expectedOutput: item.datasetCase.expectedOutputJson,
-        rubric: item.datasetCase.rubricJson,
+        expectedOutput: (item as any).expectedOutputSnapshotJson,
+        rubric: (item as any).rubricSnapshotJson,
         passThreshold: Number((run.modelParamsJson as { passThreshold?: number })?.passThreshold ?? 0.85),
         reviewThreshold: Number((run.modelParamsJson as { reviewThreshold?: number })?.reviewThreshold ?? 0.7)
       });
@@ -307,7 +327,7 @@ export class RunExecutionService {
             parentSpanId: rootSpan.id,
             spanType: "model",
             name: `${run.provider}:${run.modelName}`,
-            inputJson: modelRequest as Prisma.InputJsonValue,
+            inputJson: serializableModelRequest as Prisma.InputJsonValue,
             outputJson: (response.json ?? { text: response.text }) as Prisma.InputJsonValue,
             durationMs: response.latencyMs,
             tokensIn: response.usage.inputTokens,
@@ -338,7 +358,7 @@ export class RunExecutionService {
             costEstimate: response.costEstimate,
             rawText: response.text,
             structuredJson: response.json as Prisma.InputJsonValue | undefined,
-            requestJson: modelRequest as Prisma.InputJsonValue,
+            requestJson: serializableModelRequest as Prisma.InputJsonValue,
             responseJson: response.raw as Prisma.InputJsonValue,
             status: itemStatus
           }
@@ -352,8 +372,8 @@ export class RunExecutionService {
             spanType: "grader",
             name: "deterministic_aggregate",
             inputJson: {
-              expected: item.datasetCase.expectedOutputJson,
-              rubric: item.datasetCase.rubricJson
+              expected: (item as any).expectedOutputSnapshotJson,
+              rubric: (item as any).rubricSnapshotJson
             } as Prisma.InputJsonValue,
             outputJson: grading as unknown as Prisma.InputJsonValue,
             durationMs: Math.max(1, Date.now() - started - response.latencyMs),
@@ -423,7 +443,10 @@ export class RunExecutionService {
           }
         });
 
+        const { GradingService } = await import("@/server/services/grading-service");
+        const gradingService = new GradingService();
         const eventService = new EventService(tx);
+        
         await eventService.emitRaw({
           workspaceId: run.workspaceId,
           actorUserId: run.createdBy,
@@ -432,14 +455,30 @@ export class RunExecutionService {
           action: "model_call_completed",
           payload: { runId: run.id, status: itemStatus, usage: response.usage, costEstimate: response.costEstimate }
         });
-        await eventService.emitRaw({
-          workspaceId: run.workspaceId,
-          actorUserId: run.createdBy,
-          entityType: "run_item",
-          entityId: item.id,
-          action: "grading_completed",
-          payload: { runId: run.id, label: grading.label, score: grading.score, metrics: grading.metrics }
-        });
+
+        // Trigger LLM grading if configured
+        const graderId = (run.modelParamsJson as { graderDefinitionId?: string })?.graderDefinitionId;
+        if (graderId) {
+          try {
+            const context: RequestContext = { workspaceId: run.workspaceId, userId: run.createdBy, role: "admin" };
+            // Use existing tx for event emit if possible, but autoGrade creates its own transactions
+            // We pass the context to ensure it runs under the correct workspace
+            await gradingService.autoGrade(context, { runItemId: item.id, graderDefinitionId: graderId });
+          } catch (gradeError) {
+            console.error(`[Worker] LLM Auto-grading failed for item ${item.id}:`, gradeError);
+            // We don't fail the whole item generation if grading fails, but we log it
+          }
+        } else {
+          await eventService.emitRaw({
+            workspaceId: run.workspaceId,
+            actorUserId: run.createdBy,
+            entityType: "run_item",
+            entityId: item.id,
+            action: "grading_completed",
+            payload: { runId: run.id, label: grading.label, score: grading.score, metrics: grading.metrics }
+          });
+        }
+
         if (itemStatus === "needs_review") {
           await eventService.emitRaw({
             workspaceId: run.workspaceId,
@@ -452,7 +491,20 @@ export class RunExecutionService {
         }
       }, executionTransactionOptions);
     } catch (error) {
-      await this.handleRunItemError(run, item, trace.id, rootSpan.id, error, Date.now() - started);
+      if (abortSignal?.aborted) {
+        await prisma.$transaction(async (tx) => {
+          await tx.runItem.update({ where: { id: item.id }, data: { status: "cancelled", completedAt: new Date() } });
+          await tx.traceSpan.create({
+            data: {
+              workspaceId: run.workspaceId, traceId: trace.id, parentSpanId: rootSpan.id,
+              spanType: "error", name: "run_cancelled", durationMs: Date.now() - started, status: "cancelled"
+            }
+          });
+          await tx.trace.update({ where: { id: trace.id }, data: { status: "cancelled", totalDurationMs: Date.now() - started } });
+        }, executionTransactionOptions);
+      } else {
+        await this.handleRunItemError(run, item, trace.id, rootSpan.id, error, Date.now() - started);
+      }
     }
   }
 
@@ -677,9 +729,12 @@ function stringifyVariables(input: unknown): Record<string, string> {
 
 function isTransientProviderError(error: unknown) {
   if (error instanceof AIProviderError) {
-    return error.status === 408 || error.status === 409 || error.status === 425 || error.status === 429 || Boolean(error.status && error.status >= 500);
+    // 429 (Rate Limit), 408 (Timeout), 502/503/504 (Server issues) are transient
+    return error.status === 408 || error.status === 429 || (error.status && error.status >= 500);
   }
-  return false;
+  // Network errors are often transient
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("econnreset") || message.includes("etimedout") || message.includes("network error") || message.includes("fetch failed");
 }
 
 function retryDelayMs(error: unknown, retryCount: number) {

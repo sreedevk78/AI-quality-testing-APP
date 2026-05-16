@@ -6,16 +6,25 @@ const DEFAULT_TIMEOUT_MS = Number(process.env.AI_PROVIDER_TIMEOUT_MS ?? 60_000);
 export async function fetchProvider(
   provider: ProviderName,
   input: RequestInfo | URL,
-  init: RequestInit = {},
+  init: RequestInit & { abortSignal?: AbortSignal } = {},
   timeoutMs = DEFAULT_TIMEOUT_MS
 ) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+  let combinedSignal = controller.signal;
+  if (init.abortSignal) {
+    if (typeof AbortSignal.any === "function") {
+      combinedSignal = AbortSignal.any([controller.signal, init.abortSignal]);
+    } else {
+      init.abortSignal.addEventListener("abort", () => controller.abort(init.abortSignal?.reason));
+    }
+  }
+
   try {
     return await fetch(input, {
       ...init,
-      signal: init.signal ?? controller.signal
+      signal: combinedSignal
     });
   } catch (error) {
     if (isAbortError(error)) {

@@ -30,14 +30,15 @@
     "framer-motion": "^12.18.1",
     "lucide-react": "^0.468.0",
     "next": "^15.3.3",
+    "p-limit": "^7.3.0",
     "papaparse": "^5.5.3",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.58.1",
     "recharts": "^2.15.3",
     "tailwind-merge": "^2.6.0",
-    "zod": "^3.25.67",
-    "tsx": "^4.20.3"
+    "tsx": "^4.20.3",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

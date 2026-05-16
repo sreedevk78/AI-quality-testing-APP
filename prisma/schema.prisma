@@ -252,6 +252,8 @@ model RunItem {
   datasetCaseId       String       @map("dataset_case_id") @db.Uuid
   status              RunItemStatus @default(queued)
   inputSnapshotJson   Json         @map("input_snapshot_json")
+  expectedOutputSnapshotJson Json? @map("expected_output_snapshot_json")
+  rubricSnapshotJson  Json?        @map("rubric_snapshot_json")
   outputSnapshotJson  Json?        @map("output_snapshot_json")
   score               Decimal?     @db.Decimal(5, 4)
   errorMessage        String?      @map("error_message")

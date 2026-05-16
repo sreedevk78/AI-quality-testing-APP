@@ -106,7 +106,9 @@ export class RunService {
           runId: run.id,
           datasetCaseId: datasetCase.id,
           status: "queued",
-          inputSnapshotJson: (datasetCase.inputPayloadJson ?? {}) as Prisma.InputJsonValue
+          inputSnapshotJson: (datasetCase.inputPayloadJson ?? {}) as Prisma.InputJsonValue,
+          expectedOutputSnapshotJson: (datasetCase.expectedOutputJson ?? null) as Prisma.InputJsonValue,
+          rubricSnapshotJson: (datasetCase.rubricJson ?? {}) as Prisma.InputJsonValue
         }))
       });
 

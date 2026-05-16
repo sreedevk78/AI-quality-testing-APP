@@ -2,7 +2,6 @@ import { AppShell } from "@/components/app-shell";
 import { PageTitle } from "@/components/page-title";
 import { getPageRequestContext } from "@/server/page-context";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { traceSpans as demoSpans } from "@/lib/demo-data";
 import { TracePageClient } from "@/components/traces/trace-page-client";
 import { LiveRunRefresh } from "@/components/runs/live-run-refresh";
 import type { Status, TraceSpan } from "@/lib/types";
@@ -11,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 async function getTraceDetail(workspaceId: string, traceId: string): Promise<{ spans: TraceSpan[]; traceKey: string }> {
   if (!isDatabaseConfigured()) {
-    return { spans: demoSpans, traceKey: traceId };
+    return { spans: [], traceKey: traceId };
   }
   const trace = await prisma.trace.findFirst({
     where: { id: traceId, workspaceId },
@@ -53,7 +52,7 @@ export default async function TraceDetailPage({ params }: { params: Promise<{ id
 
   return (
     <AppShell>
-      <LiveRunRefresh status={spans.some((span) => span.status === "running" || span.status === "retrying") ? "running" : "completed"} />
+      <LiveRunRefresh isActive={spans.some((span) => span.status === "running" || span.status === "retrying")} />
       <PageTitle
         title={`Trace: ${traceKey}`}
         description={`${spans.length} span(s) captured. Click any span to inspect raw input/output, latency, and token usage.`}

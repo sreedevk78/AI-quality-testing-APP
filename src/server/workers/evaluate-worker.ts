@@ -31,7 +31,7 @@ async function main() {
   disconnectPrisma = () => prisma.$disconnect();
 
   const workerId = process.env.WORKER_ID || `eval-worker-${hostname()}-${process.pid}`;
-  const batchSize = Number(process.env.WORKER_CONCURRENCY ?? process.env.WORKER_BATCH_SIZE ?? 2);
+  const batchSize = Number(process.env.WORKER_CONCURRENCY ?? process.env.WORKER_BATCH_SIZE ?? 1);
   const leaseMs = Number(process.env.WORKER_LEASE_MS ?? 5 * 60 * 1000);
   const pollMs = Number(process.env.WORKER_POLL_MS ?? 3000);
   const runOnce = process.env.WORKER_ONCE === "1";
@@ -43,12 +43,24 @@ async function main() {
     await jobs.recoverStaleJobs({ staleMs: leaseMs });
     console.log(JSON.stringify({ workerId, status: "started", startedAt: new Date().toISOString(), runOnce }));
 
+    let lastRecoveryAt = 0;
+
     while (!shuttingDown) {
+      // Periodically recover stale jobs from crashed workers
+      if (Date.now() - lastRecoveryAt > 5 * 60_000) {
+        lastRecoveryAt = Date.now();
+        await jobs.recoverStaleJobs({ staleMs: leaseMs }).catch(console.error);
+      }
+
       const leased = await jobs.leaseNextJobs({ workerId, limit: batchSize, leaseMs });
 
       for (const job of leased) {
-        await jobs.heartbeat(job.id, workerId);
-        await executor.processJob(job, workerId);
+        // Initial heartbeat
+        await jobs.heartbeat(job.id, workerId).catch(() => {});
+        // Process with internal heartbeat support
+        await executor.processJob(job, workerId, async () => { 
+          await jobs.heartbeat(job.id, workerId).catch(() => {}); 
+        });
       }
 
       if (leased.length > 0) {

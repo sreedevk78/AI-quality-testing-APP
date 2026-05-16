@@ -19,7 +19,7 @@ export default async function GradingPage() {
   
   return (
     <AppShell>
-      <LiveRunRefresh status={reviewQueue.length > 0 ? "needs_review" : "completed"} />
+      <LiveRunRefresh isActive={reviewQueue.length > 0} />
       <PageTitle
         title="Grading queue"
         description="Human review and automated rubric scores flow into comparison metrics and release gates."

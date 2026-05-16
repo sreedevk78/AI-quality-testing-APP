@@ -144,10 +144,12 @@ export class GradingService {
         }
       });
 
+      const rootSpan = await tx.traceSpan.findFirst({ where: { traceId: trace.id, spanType: "root" } });
       await tx.traceSpan.create({
         data: {
           workspaceId: context.workspaceId,
           traceId: trace.id,
+          parentSpanId: rootSpan?.id,
           spanType: "review",
           name: `human_review:${input.verdict}`,
           inputJson: { runItemId: item.id } as Prisma.InputJsonValue,
@@ -233,8 +235,8 @@ export class GradingService {
             content: JSON.stringify({
               input: item.inputSnapshotJson,
               output: item.outputSnapshotJson,
-              expected: item.datasetCase.expectedOutputJson,
-              rubric: item.datasetCase.rubricJson
+              expected: (item as any).expectedOutputSnapshotJson,
+              rubric: (item as any).rubricSnapshotJson
             })
           }
         ]
@@ -242,17 +244,19 @@ export class GradingService {
 
       return prisma.$transaction(async (tx) => {
         const label = normalizeGradeLabel(result.json.label);
+        const rootSpan = await tx.traceSpan.findFirst({ where: { traceId: trace.id, spanType: "root" } });
         const span = await tx.traceSpan.create({
           data: {
             workspaceId: context.workspaceId,
             traceId: trace.id,
+            parentSpanId: rootSpan?.id,
             spanType: "grader",
             name: `${grader.type}:${grader.name}`,
             inputJson: {
               input: item.inputSnapshotJson,
               output: item.outputSnapshotJson,
-              expected: item.datasetCase.expectedOutputJson,
-              rubric: item.datasetCase.rubricJson
+              expected: (item as any).expectedOutputSnapshotJson,
+              rubric: (item as any).rubricSnapshotJson
             } as Prisma.InputJsonValue,
             outputJson: result.json as Prisma.InputJsonValue,
             durationMs: result.latencyMs,
@@ -469,9 +473,24 @@ export function parseJsonFromOutput(output: unknown): Record<string, unknown> | 
     return output as Record<string, unknown>;
   }
   if (typeof output === "string") {
+    let clean = output.trim();
+    if (clean.startsWith("```json")) {
+      clean = clean.replace(/^```json\s*/, "").replace(/\s*```$/, "");
+    } else if (clean.startsWith("```")) {
+      clean = clean.replace(/^```\s*/, "").replace(/\s*```$/, "");
+    }
     try {
-      return JSON.parse(output);
+      return JSON.parse(clean);
     } catch {
+      // Fallback: try to find anything that looks like a JSON object in the string
+      const match = clean.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          return JSON.parse(match[0]);
+        } catch {
+          return undefined;
+        }
+      }
       return undefined;
     }
   }

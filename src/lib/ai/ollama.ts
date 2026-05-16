@@ -35,7 +35,8 @@ export class OllamaProvider implements AIProvider {
           seed: request.seed,
           num_predict: request.maxOutputTokens
         }
-      })
+      }),
+      abortSignal: request.abortSignal
     });
 
     if (!response.ok) {

@@ -7,6 +7,7 @@ import { BillingButton } from "@/components/settings/billing-button";
 import { ProviderCredentialsManager } from "@/components/settings/provider-credentials-manager";
 import { getPageRequestContext } from "@/server/page-context";
 import { ProviderCredentialService } from "@/server/services/provider-credential-service";
+import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,14 @@ export default async function SettingsPage() {
   const groqConfigured = Boolean(process.env.GROQ_API_KEY);
   const geminiConfigured = Boolean(process.env.GEMINI_API_KEY);
   const ollamaConfigured = Boolean(process.env.OLLAMA_BASE_URL);
+
+  const [traceCount, datasetCount] = await Promise.all([
+    prisma.trace.count({ where: { workspaceId: context.workspaceId } }),
+    prisma.dataset.count({ where: { workspaceId: context.workspaceId } })
+  ]);
+
+  const traceLimit = 10000;
+  const datasetLimit = 50;
 
   return (
     <AppShell>
@@ -96,19 +105,19 @@ export default async function SettingsPage() {
               <div>
                 <div className="flex justify-between text-xs mb-1">
                    <span className="text-muted-foreground font-medium uppercase">Monthly Traces</span>
-                   <span className="font-bold">1,240 / 10,000</span>
+                   <span className="font-bold">{traceCount.toLocaleString()} / {traceLimit.toLocaleString()}</span>
                 </div>
                 <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                   <div className="h-full bg-primary" style={{ width: '12.4%' }} />
+                   <div className="h-full bg-primary transition-all" style={{ width: `${Math.min(100, (traceCount / traceLimit) * 100)}%` }} />
                 </div>
               </div>
               <div>
                 <div className="flex justify-between text-xs mb-1">
                    <span className="text-muted-foreground font-medium uppercase">Stored Datasets</span>
-                   <span className="font-bold">8 / 50</span>
+                   <span className="font-bold">{datasetCount.toLocaleString()} / {datasetLimit}</span>
                 </div>
                 <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
-                   <div className="h-full bg-primary" style={{ width: '16%' }} />
+                   <div className="h-full bg-primary transition-all" style={{ width: `${Math.min(100, (datasetCount / datasetLimit) * 100)}%` }} />
                 </div>
               </div>
             </div>

@@ -16,6 +16,7 @@ export type AIRequest = {
   responseSchema?: unknown;
   apiKey?: string;
   baseUrl?: string;
+  abortSignal?: AbortSignal;
 };
 
 export type AIUsage = {

@@ -5,7 +5,6 @@ import { StatusBadge } from "@/components/status-badge";
 import { formatCurrency, formatPercent } from "@/lib/utils";
 import { getPageRequestContext } from "@/server/page-context";
 import { prisma, isDatabaseConfigured } from "@/lib/prisma";
-import { runs as demoRuns } from "@/lib/demo-data";
 import { RunDetailActions } from "@/components/runs/run-actions";
 import { LiveRunRefresh } from "@/components/runs/live-run-refresh";
 import Link from "next/link";
@@ -21,9 +20,7 @@ type RunDetail = EvalRun & {
 
 async function getRunDetail(workspaceId: string, runId: string): Promise<RunDetail | null> {
   if (!isDatabaseConfigured()) {
-    const found = demoRuns.find((r) => r.id === runId);
-    const demo = found ?? demoRuns[0] ?? null;
-    return demo ? { ...demo, statusEvents: [], jobs: [], events: [] } : null;
+    return null;
   }
   const run = await prisma.run.findFirst({
     where: { id: runId, workspaceId },
@@ -141,7 +138,10 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
 
   return (
     <AppShell>
-      <LiveRunRefresh status={run.status} />
+      <LiveRunRefresh 
+        isActive={["queued", "initializing", "running", "retrying", "needs_review"].includes(run.status)} 
+        pollUrl={`/api/runs/${run.id}/poll`} 
+      />
       <PageTitle
         title={run.name}
         description={`${run.provider} / ${run.model} - ${run.dataset}`}

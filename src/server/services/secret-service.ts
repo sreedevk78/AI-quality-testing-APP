@@ -38,15 +38,11 @@ export class SecretService {
 }
 
 function getKey() {
-  const material =
-    process.env.SECRET_ENCRYPTION_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE_SECRET ||
-    process.env.SUPABASE_SECRET_KEY;
+  const material = process.env.SECRET_ENCRYPTION_KEY;
 
-  if (!material && process.env.NODE_ENV === "production") {
-    throw new Error("SECRET_ENCRYPTION_KEY must be configured in production.");
+  if (!material) {
+    throw new Error("SECRET_ENCRYPTION_KEY must be configured.");
   }
 
-  return crypto.createHash("sha256").update(material ?? "development-only-secret-key-change-me").digest();
+  return crypto.createHash("sha256").update(material).digest();
 }
